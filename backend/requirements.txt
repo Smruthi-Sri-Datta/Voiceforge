@@ -1,5 +1,4 @@
 fastapi
 uvicorn
 python-multipart
-TTS
-torch
+coqui-tts[codec]
