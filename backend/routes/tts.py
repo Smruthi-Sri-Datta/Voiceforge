@@ -11,6 +11,7 @@ class GenerateRequest(BaseModel):
     text: str
     speaker: str = "Ana Florence"
     language: str = "en"
+    speed: float = 1.0
 
 @router.post("/generate")
 def generate_audio(request: GenerateRequest):
@@ -20,13 +21,18 @@ def generate_audio(request: GenerateRequest):
         text=request.text,
         output_path=output_path,
         speaker=request.speaker,
-        language=request.language
+        language=request.language,
+        speed=request.speed
     )
     return {"message": "Audio generated!", "file": filename}
 
 @router.get("/voices")
 def get_voices():
     return {"voices": tts_service.get_voices()}
+
+@router.get("/languages")
+def get_languages():
+    return {"languages": tts_service.get_languages()}
 
 @router.post("/clone-voice")
 async def clone_voice(file: UploadFile = File(...)):
