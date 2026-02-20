@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Studio from './pages/Studio'
 
 function Home() { return <h1>Home Page</h1> }
-function Studio() { return <h1>Studio Page</h1> }
 function Voices() { return <h1>Voices Page</h1> }
 function History() { return <h1>History Page</h1> }
 
