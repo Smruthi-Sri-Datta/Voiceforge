@@ -14,5 +14,8 @@ class TTSService:
             file_path=output_path
         )
         return output_path
+    
+    def get_voices(self):
+        return ["Ana Florence", "Claribel Dervla", "Daisy Studious", "Gracie Wise"]
 
 tts_service = TTSService()
