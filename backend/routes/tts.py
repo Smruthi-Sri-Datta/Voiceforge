@@ -1,6 +1,7 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import Optional
 from backend.services.tts_service import tts_service
 import uuid
 import os
@@ -12,18 +13,32 @@ class GenerateRequest(BaseModel):
     speaker: str = "Ana Florence"
     language: str = "en"
     speed: float = 1.0
+    voice_id: Optional[str] = None
 
 @router.post("/generate")
 def generate_audio(request: GenerateRequest):
     filename = f"{uuid.uuid4()}.wav"
     output_path = f"storage/outputs/{filename}"
-    tts_service.generate_audio(
-        text=request.text,
-        output_path=output_path,
-        speaker=request.speaker,
-        language=request.language,
-        speed=request.speed
-    )
+
+    speaker_wav = None
+    if request.voice_id:
+        speaker_wav = f"storage/outputs/{request.voice_id}"
+
+    try:
+        tts_service.generate_audio(
+            text=request.text,
+            output_path=output_path,
+            speaker=request.speaker,
+            speaker_wav=speaker_wav,
+            language=request.language,
+            speed=request.speed
+        )
+    except ValueError as e:
+        # Clean readable error → sent to frontend as JSON
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
     return {"message": "Audio generated!", "file": filename}
 
 @router.get("/voices")
