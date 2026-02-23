@@ -9,15 +9,15 @@ import os
 router = APIRouter()
 
 class GenerateRequest(BaseModel):
-    text: str
-    speaker: str = "Ana Florence"
+    text:     str
+    speaker:  str = "Ana Florence"
     language: str = "en"
-    speed: float = 1.0
+    speed:    float = 1.0
     voice_id: Optional[str] = None
 
 @router.post("/generate")
 def generate_audio(request: GenerateRequest):
-    filename = f"{uuid.uuid4()}.wav"
+    filename    = f"{uuid.uuid4()}.wav"
     output_path = f"storage/outputs/{filename}"
 
     speaker_wav = None
@@ -25,7 +25,7 @@ def generate_audio(request: GenerateRequest):
         speaker_wav = f"storage/outputs/{request.voice_id}"
 
     try:
-        tts_service.generate_audio(
+        warning = tts_service.generate_audio(
             text=request.text,
             output_path=output_path,
             speaker=request.speaker,
@@ -34,12 +34,15 @@ def generate_audio(request: GenerateRequest):
             speed=request.speed
         )
     except ValueError as e:
-        # Clean readable error → sent to frontend as JSON
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-    return {"message": "Audio generated!", "file": filename}
+    return {
+        "message": "Audio generated!",
+        "file":    filename,
+        "warning": warning   # None if all good, string if Romanized script detected
+    }
 
 @router.get("/voices")
 def get_voices():
@@ -51,7 +54,7 @@ def get_languages():
 
 @router.post("/clone-voice")
 async def clone_voice(file: UploadFile = File(...)):
-    voice_id = f"{uuid.uuid4()}.wav"
+    voice_id  = f"{uuid.uuid4()}.wav"
     save_path = f"storage/outputs/{voice_id}"
     with open(save_path, "wb") as f:
         f.write(await file.read())

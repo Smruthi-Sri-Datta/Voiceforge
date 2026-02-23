@@ -63,6 +63,7 @@ function Studio() {
   const [loading, setLoading] = useState(false)
   const [hoveredChip, setHoveredChip] = useState(null)
   const [generationError, setGenerationError] = useState(null)
+  const [generationWarning, setGenerationWarning] = useState(null)   // ← NEW
 
   const [panelMode, setPanelMode] = useState('settings')
   const [voiceTab, setVoiceTab] = useState('default')
@@ -114,6 +115,7 @@ function Studio() {
   async function _doGenerate() {
     setLangMismatch(null)
     setGenerationError(null)
+    setGenerationWarning(null)   // ← clear previous warning
     setLoading(true)
     setBottomBar(null)
     try {
@@ -137,6 +139,11 @@ function Studio() {
       const data = await response.json()
       const url = `${BACKEND}/api/audio/${data.file}`
       setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
+
+      // ── Show warning if Romanized script was detected ──
+      if (data.warning) setGenerationWarning(data.warning)
+      else setGenerationWarning(null)
+
       addHistoryEntry({
         text,
         voice: { name: voice.name, color: voice.color, type: voice.type },
@@ -222,6 +229,7 @@ function Studio() {
                 setText(e.target.value)
                 if (langMismatch) setLangMismatch(null)
                 if (generationError) setGenerationError(null)
+                if (generationWarning) setGenerationWarning(null)
               }}
             />
             {!text && (
@@ -250,6 +258,17 @@ function Studio() {
             </div>
           )}
 
+          {/* Romanized script warning — yellow, audio still plays */}
+          {generationWarning && (
+            <div style={{ margin: '0 2.5rem 0.75rem', padding: '0.85rem 1rem', background: isDark ? '#1c1500' : '#fffbeb', border: `1px solid ${isDark ? '#7c6400' : '#fcd34d'}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+              <div style={{ fontSize: '0.83rem', color: isDark ? '#fcd34d' : '#92400e', lineHeight: '1.5' }}>
+                ⚠️ {generationWarning}
+              </div>
+              <button onClick={() => setGenerationWarning(null)}
+                style={{ background: 'transparent', border: 'none', color: isDark ? '#fcd34d' : '#92400e', cursor: 'pointer', fontSize: '1rem', flexShrink: 0, padding: '0.2rem' }}>✕</button>
+            </div>
+          )}
+
           {/* Language mismatch */}
           {langMismatch && (
             <div style={{ margin: '0 2.5rem 0.75rem', padding: '0.85rem 1rem', background: isDark ? '#1c1500' : '#fffbeb', border: `1px solid ${isDark ? '#7c6400' : '#fcd34d'}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
@@ -272,15 +291,15 @@ function Studio() {
           {/* Composer bar */}
           <div style={{ borderTop: `1px solid ${t.divider}`, padding: '0.85rem 2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', background: t.centerBg, flexShrink: 0 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <div style={{ fontSize: '0.8rem', color: t.labelColor }}>
+              <div style={{ fontSize: '0.8rem', color: t.labelColor }}>
                 <span style={{ color: text.length > 4500 ? '#ef4444' : t.labelMid, fontWeight: '500' }}>{text.length}</span>
                 <span> / 5,000 characters</span>
-            </div>
-            {!isAuthenticated && (
+              </div>
+              {!isAuthenticated && (
                 <div style={{ fontSize: '0.75rem', fontWeight: '500', color: guestCredits.tts > 0 ? '#a78bfa' : '#ef4444' }}>
-                {guestCredits.tts > 0 ? `${guestCredits.tts} free generation remaining` : '0 free generations — sign in to continue'}
+                  {guestCredits.tts > 0 ? `${guestCredits.tts} free generation remaining` : '0 free generations — sign in to continue'}
                 </div>
-            )}
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
               <button onClick={() => { if (bottomBar?.url) window.open(bottomBar.url) }}
