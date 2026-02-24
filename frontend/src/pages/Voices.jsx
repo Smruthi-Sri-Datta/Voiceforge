@@ -4,7 +4,7 @@ import { useVoices } from '../context/VoicesContext'
 import { useAuth } from '../context/AuthContext'
 
 const ALLOWED_FORMATS = ['audio/wav', 'audio/mpeg', 'audio/mp3']
-const BACKEND = 'http://localhost:8000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
 async function analyzeVoice(audioUrl) {
   const response = await fetch(audioUrl)

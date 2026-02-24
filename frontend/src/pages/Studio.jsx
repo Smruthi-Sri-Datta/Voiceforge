@@ -4,7 +4,7 @@ import { useVoices } from '../context/VoicesContext'
 import { useHistory } from '../context/HistoryContext'
 import { useAuth } from '../context/AuthContext'
 
-const BACKEND = 'http://localhost:8000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
 // ── Indian language codes (routed to Sarvam internally) ───────
 const INDIAN_LANG_CODES = ["hi", "bn", "ta", "te", "gu", "kn", "ml", "mr", "pa", "or"]
