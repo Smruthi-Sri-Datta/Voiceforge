@@ -17,7 +17,7 @@ class GenerateRequest(BaseModel):
 
 @router.post("/generate")
 def generate_audio(request: GenerateRequest):
-    filename    = f"{uuid.uuid4()}.wav"
+    filename    = f"{uuid.uuid4()}.mp3"        # ← MP3 now
     output_path = f"storage/outputs/{filename}"
 
     speaker_wav = None
@@ -41,7 +41,7 @@ def generate_audio(request: GenerateRequest):
     return {
         "message": "Audio generated!",
         "file":    filename,
-        "warning": warning   # None if all good, string if Romanized script detected
+        "warning": warning
     }
 
 @router.get("/voices")
@@ -54,7 +54,7 @@ def get_languages():
 
 @router.post("/clone-voice")
 async def clone_voice(file: UploadFile = File(...)):
-    voice_id  = f"{uuid.uuid4()}.wav"
+    voice_id  = f"{uuid.uuid4()}.wav"          # cloned voice stays WAV (input)
     save_path = f"storage/outputs/{voice_id}"
     with open(save_path, "wb") as f:
         f.write(await file.read())
@@ -65,4 +65,6 @@ def get_audio(file_id: str):
     file_path = f"storage/outputs/{file_id}"
     if not os.path.exists(file_path):
         return {"error": "File not found"}
-    return FileResponse(file_path, media_type="audio/wav")
+    # Serve correct MIME type based on extension
+    media_type = "audio/mpeg" if file_id.endswith(".mp3") else "audio/wav"
+    return FileResponse(file_path, media_type=media_type)
