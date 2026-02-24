@@ -18,7 +18,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
            "http://localhost:5174",
-           "https://voiceforge.vercel.app",
+           "https://voiceforge-gamma.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
