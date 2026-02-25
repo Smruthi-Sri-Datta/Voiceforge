@@ -1,53 +1,56 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
+import { useAuth } from './AuthContext'
+
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
 const DEFAULT_VOICES = [
-  { name: "Ana Florence", color: "#f97316", type: "default" },
+  { name: "Ana Florence",    color: "#f97316", type: "default" },
   { name: "Claribel Dervla", color: "#a855f7", type: "default" },
-  { name: "Daisy Studious", color: "#3b82f6", type: "default" },
-  { name: "Gracie Wise", color: "#10b981", type: "default" },
+  { name: "Daisy Studious",  color: "#3b82f6", type: "default" },
+  { name: "Gracie Wise",     color: "#10b981", type: "default" },
 ]
-
-const STORAGE_KEY = "voiceforge_cloned_voices"
-
-function loadFromStorage() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : []
-  } catch {
-    return []
-  }
-}
-
-function saveToStorage(voices) {
-  try {
-    // Don't save previewUrl — it's a blob URL, invalid after refresh
-    const toSave = voices.map(({ previewUrl, ...rest }) => rest)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
-  } catch {
-    console.warn("Could not save voices to localStorage")
-  }
-}
 
 const VoicesContext = createContext()
 
 export function VoicesProvider({ children }) {
-  // Initialize from localStorage on first load
-  const [clonedVoices, setClonedVoices] = useState(() => loadFromStorage())
+  const { user, authFetch } = useAuth()
+  const [clonedVoices, setClonedVoices] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!user) {
+      setClonedVoices([])
+      return
+    }
+    fetchVoices()
+  }, [user])
+
+  async function fetchVoices() {
+    setLoading(true)
+    try {
+      const res = await authFetch(`${BACKEND}/api/my-voices`)
+      if (!res.ok) return
+      const data = await res.json()
+      const voices = data.voices.map(v => ({
+        name:     v.name,
+        voice_id: v.voice_id,
+        color:    "#7c3aed",
+        type:     "custom",
+      }))
+      setClonedVoices(voices)
+    } catch (err) {
+      console.error("Failed to fetch voices:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   function addClonedVoice(voice) {
-    setClonedVoices(prev => {
-      const updated = [...prev, voice]
-      saveToStorage(updated)   // persist immediately
-      return updated
-    })
+    setClonedVoices(prev => [...prev, voice])
   }
 
   function removeClonedVoice(voiceName) {
-    setClonedVoices(prev => {
-      const updated = prev.filter(v => v.name !== voiceName)
-      saveToStorage(updated)
-      return updated
-    })
+    setClonedVoices(prev => prev.filter(v => v.name !== voiceName))
   }
 
   const allVoices = [...DEFAULT_VOICES, ...clonedVoices]
@@ -58,7 +61,9 @@ export function VoicesProvider({ children }) {
       clonedVoices,
       addClonedVoice,
       removeClonedVoice,
-      DEFAULT_VOICES
+      refreshVoices: fetchVoices,
+      DEFAULT_VOICES,
+      loading
     }}>
       {children}
     </VoicesContext.Provider>

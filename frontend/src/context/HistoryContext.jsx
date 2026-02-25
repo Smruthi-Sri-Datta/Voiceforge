@@ -1,58 +1,66 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
+import { useAuth } from './AuthContext'
 
-const STORAGE_KEY = "voiceforge_tts_history"
-
-function loadFromStorage() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : []
-  } catch {
-    return []
-  }
-}
-
-function saveToStorage(entries) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
-  } catch {
-    console.warn("Could not save history to localStorage")
-  }
-}
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
 const HistoryContext = createContext()
 
 export function HistoryProvider({ children }) {
-  const [history, setHistory] = useState(() => loadFromStorage())
+  const { user, authFetch } = useAuth()
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!user) {
+      setHistory([])
+      return
+    }
+    fetchHistory()
+  }, [user])
+
+  async function fetchHistory() {
+    setLoading(true)
+    try {
+      const res = await authFetch(`${BACKEND}/api/my-history`)
+      if (!res.ok) return
+      const data = await res.json()
+      const entries = data.generations.map(g => ({
+        id:        g.id,
+        text:      g.text,
+        language:  g.language,
+        voice:     { name: g.speaker, color: "#7c3aed" },
+        audioUrl:  `${BACKEND}/api/audio/${g.file}`,
+        timestamp: g.created_at,
+      }))
+      setHistory(entries)
+    } catch (err) {
+      console.error("Failed to fetch history:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   function addHistoryEntry(entry) {
+    // Optimistically add to local state — DB already saved via backend
     const newEntry = {
-      id: Date.now(),                              // unique id
-      text: entry.text,                            // what was typed
-      voice: entry.voice,                          // voice name + color
-      language: entry.language,                    // language code
-      speed: entry.speed,                          // speed value
-      audioUrl: entry.audioUrl,                    // url to replay
-      timestamp: new Date().toISOString(),         // when it was generated
-      duration: entry.duration || null,            // audio duration (optional)
+      id:        entry.id || Date.now().toString(),
+      text:      entry.text,
+      voice:     entry.voice,
+      language:  entry.language,
+      speed:     entry.speed,
+      audioUrl:  entry.audioUrl,
+      timestamp: new Date().toISOString(),
+      duration:  entry.duration || null,
     }
-    setHistory(prev => {
-      const updated = [newEntry, ...prev]          // newest first
-      saveToStorage(updated)
-      return updated
-    })
+    setHistory(prev => [newEntry, ...prev])
   }
 
   function removeHistoryEntry(id) {
-    setHistory(prev => {
-      const updated = prev.filter(e => e.id !== id)
-      saveToStorage(updated)
-      return updated
-    })
+    setHistory(prev => prev.filter(e => e.id !== id))
   }
 
   function clearHistory() {
     setHistory([])
-    localStorage.removeItem(STORAGE_KEY)
   }
 
   return (
@@ -61,6 +69,8 @@ export function HistoryProvider({ children }) {
       addHistoryEntry,
       removeHistoryEntry,
       clearHistory,
+      refreshHistory: fetchHistory,
+      loading,
     }}>
       {children}
     </HistoryContext.Provider>
