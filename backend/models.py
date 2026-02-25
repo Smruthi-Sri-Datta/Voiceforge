@@ -27,6 +27,7 @@ class Voice(Base):
     user_id     = Column(String, ForeignKey("users.id"), nullable=False)
     name        = Column(String, nullable=False)
     file_path   = Column(String, nullable=False)
+    audio_url   = Column(String, nullable=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
     user        = relationship("User", back_populates="voices")
@@ -40,6 +41,7 @@ class Generation(Base):
     language    = Column(String, nullable=False)
     speaker     = Column(String, nullable=False)
     file_path   = Column(String, nullable=False)
+    audio_url   = Column(String, nullable=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
     user        = relationship("User", back_populates="generations")
