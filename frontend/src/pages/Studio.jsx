@@ -60,7 +60,7 @@ function Studio() {
   const { isDark } = useTheme()
   const { allVoices, clonedVoices, DEFAULT_VOICES } = useVoices()
   const { addHistoryEntry } = useHistory()
-  const { useGuestCredit, isAuthenticated, guestCredits } = useAuth()
+  const { useGuestCredit, isAuthenticated, guestCredits, authFetch } = useAuth()
 
   const [text, setText]                           = useState("")
   const [voice, setVoice]                         = useState(allVoices[0])
@@ -160,7 +160,7 @@ function Studio() {
     setLoading(true)
     setBottomBar(null)
     try {
-      const response = await fetch(`${BACKEND}/api/generate`, {
+      const response = await authFetch(`${BACKEND}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -213,7 +213,7 @@ function Studio() {
     setPreviewLoading(v.name)
     try {
       const previewText = VOICE_META[v.name]?.previewText || `Hi, I'm ${v.name}. How can I help you today?`
-      const response = await fetch(`${BACKEND}/api/generate`, {
+      const response = await authFetch(`${BACKEND}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
