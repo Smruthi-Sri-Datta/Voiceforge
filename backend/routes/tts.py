@@ -160,7 +160,8 @@ def get_audio(filename: str):
     path = f"storage/outputs/{filename}"
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Audio not found")
-    return FileResponse(path, media_type="audio/mpeg")
+    media_type = "audio/wav" if filename.endswith(".wav") else "audio/mpeg"
+    return FileResponse(path, media_type=media_type)
 
 @router.delete("/my-voices/{voice_id}")
 def delete_voice(
