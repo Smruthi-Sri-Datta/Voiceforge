@@ -107,7 +107,7 @@ class TTSService:
         pace = max(0.3, min(3.0, speed))
 
         # Use passed speaker (lowercase) or fallback to anushka
-        sarvam_speaker = speaker.lower() if speaker else "anushka"
+        sarvam_speaker = speaker.lower() if speaker and not speaker.lower().startswith("v") else "anushka"
 
         try:
             response = requests.post(
