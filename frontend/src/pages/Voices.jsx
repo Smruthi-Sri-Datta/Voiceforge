@@ -66,7 +66,7 @@ function getAudioUrl(v) {
 function Voices() {
   const { isDark } = useTheme()
   const { clonedVoices, addClonedVoice, removeClonedVoice, DEFAULT_VOICES } = useVoices()
-  const { useGuestCredit } = useAuth()   // ← credit gate
+  const { useGuestCredit, authFetch } = useAuth()   // ← credit gate
 
   const [uploading, setUploading]             = useState(false)
   const [dragOver, setDragOver]               = useState(false)
@@ -131,7 +131,7 @@ function Voices() {
     try {
       const formData = new FormData()
       formData.append("file", file)
-      const response = await fetch(`${BACKEND}/api/clone-voice`, { method: "POST", body: formData })
+      const response = await authFetch(`${BACKEND}/api/clone-voice`, { method: "POST", body: formData })
       const data = await response.json()
       const previewUrl = URL.createObjectURL(file)
       addClonedVoice({
@@ -198,7 +198,7 @@ function Voices() {
     if (previewUrls[vName]) { setPreviewingVoice(vName); return }
     setPreviewingVoice(vName)
     try {
-      const response = await fetch(`${BACKEND}/api/generate`, {
+      const response = await authFetch(`${BACKEND}/api/generate`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: `Hi, I'm ${vName}. How can I help you today?`, speaker: vName, language: "en", speed: 1.0 })
       })
