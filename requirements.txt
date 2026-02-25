@@ -146,3 +146,4 @@ urllib3==2.6.3
 uvicorn==0.41.0
 Werkzeug==3.1.6
 yarl==1.22.0
+supabase
