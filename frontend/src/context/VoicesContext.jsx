@@ -17,6 +17,12 @@ export function VoicesProvider({ children }) {
   const [clonedVoices, setClonedVoices] = useState([])
   const [loading, setLoading] = useState(false)
 
+    // Add this inside VoicesProvider, before the useEffect
+    useEffect(() => {
+    localStorage.removeItem('voiceforge_cloned_voices')
+    localStorage.removeItem('voiceforge_tts_history')
+    }, [])
+
   useEffect(() => {
     if (!user) {
       setClonedVoices([])
