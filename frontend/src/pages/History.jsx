@@ -239,7 +239,7 @@ function History() {
   const selectedVoice = activeTab === 'voices' ? clonedVoices.find(v => v.name === selectedId)   : null
 
   // ── Multi-select helpers ──────────────────────────────────────
-  const currentList = activeTab === 'tts' ? filteredTTS.map(e => e.id) : filteredVoices.map(v => v.name)
+  const currentList = activeTab === 'tts' ? filteredTTS.map(e => e.id) : filteredVoices.map(v => v.voice_id)
   const allChecked  = currentList.length > 0 && currentList.every(id => checkedIds.has(id))
   const someChecked = checkedIds.size > 0
 
@@ -427,17 +427,17 @@ function History() {
                 {clonedVoices.length === 0 ? "No cloned voices yet. Go to Voices and clone your first voice!" : "No results match your search."}
               </div>
             ) : filteredVoices.map((v, i) => {
-              const isChecked  = checkedIds.has(v.name)
+              const isChecked  = checkedIds.has(v.voice_id)
               const isSelected = selectedId === v.name && !selectMode
               return (
                 <div key={i}
-                  onClick={() => selectMode ? toggleCheck(v.name) : setSelectedId(v.name)}
+                  onClick={() => selectMode ? toggleCheck(v.voice_id) : setSelectedId(v.name)}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.85rem 1rem', background: isChecked ? t.rowChecked : isSelected ? t.rowSelected : t.rowBg, border: `1px solid ${isChecked ? t.rowCheckedBorder : isSelected ? t.rowSelectedBorder : t.rowBorder}`, borderRadius: '10px', cursor: 'pointer', transition: 'all 0.15s' }}
                   onMouseEnter={e => { if (!isSelected && !isChecked) e.currentTarget.style.background = t.rowHover }}
                   onMouseLeave={e => { if (!isSelected && !isChecked) e.currentTarget.style.background = t.rowBg }}
                 >
                   {selectMode
-                    ? <Checkbox checked={isChecked} onChange={() => toggleCheck(v.name)} />
+                    ? <Checkbox checked={isChecked} onChange={() => toggleCheck(v.voice_id)} />
                     : <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: `radial-gradient(circle at 35% 35%, ${v.color}cc, ${v.color}44)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '700', fontSize: '0.85rem', flexShrink: 0 }}>{v.name[0]}</div>
                   }
                   <div style={{ flex: 1 }}>
