@@ -119,14 +119,20 @@ def get_my_voices(
         Voice.user_id == current_user.id
     ).order_by(Voice.created_at.desc()).all()
 
-    return {"voices": [
-        {
-            "voice_id":   v.id,
-            "name":       v.name,
-            "created_at": v.created_at.isoformat(),
-        }
-        for v in voices
-    ]}
+    valid_voices = []
+    for v in voices:
+        if os.path.exists(v.file_path):
+            valid_voices.append({
+                "voice_id":   v.id,
+                "name":       v.name,
+                "created_at": v.created_at.isoformat(),
+            })
+        else:
+            # File gone (pod restarted) — clean up DB too
+            db.delete(v)
+    db.commit()
+
+    return {"voices": valid_voices}
 
 @router.get("/my-history")
 def get_my_history(
