@@ -446,7 +446,7 @@ function History() {
                   </div>
                   <div style={{ background: '#7c3aed18', color: '#a78bfa', padding: '0.15rem 0.5rem', borderRadius: '20px', fontSize: '0.72rem', border: '1px solid #7c3aed33', flexShrink: 0 }}>Custom</div>
                   {!selectMode && (
-                    <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: 'voice', id: v.name }) }} title="Delete" style={deleteButtonStyle}
+                    <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: 'voice', id: v.voice_id }) }} title="Delete" style={deleteButtonStyle}
                       onMouseEnter={e => { e.currentTarget.style.background = '#ef444420'; e.currentTarget.style.borderColor = '#ef444455'; e.currentTarget.style.color = '#ef4444' }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = t.labelColor }}>🗑</button>
                   )}
@@ -543,7 +543,7 @@ function History() {
 
             <div style={{ marginTop: 'auto', paddingTop: '1.5rem' }}>
               <div style={{ borderTop: `1px solid ${t.divider}`, marginBottom: '1.5rem' }} />
-              <button onClick={() => setDeleteTarget({ type: 'voice', id: selectedVoice.name })}
+              <button onClick={() => setDeleteTarget({ type: 'voice', id: selectedVoice.voice_id })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: `1px solid ${isDark ? '#7f1d1d' : '#fecaca'}`, background: 'transparent', color: '#ef4444', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}>
                 🗑 Delete Voice
               </button>

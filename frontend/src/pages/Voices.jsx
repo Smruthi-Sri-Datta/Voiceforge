@@ -339,7 +339,7 @@ function Voices() {
                           style={{ width: '30px', height: '30px', borderRadius: '50%', background: expandedAnalysis === v.name ? '#7c3aed22' : 'transparent', border: `1px solid ${expandedAnalysis === v.name ? '#7c3aed55' : t.rowBorder}`, color: expandedAnalysis === v.name ? '#a78bfa' : t.textColor, cursor: analyzingVoice === v.name ? 'wait' : 'pointer', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
                           {analyzingVoice === v.name ? '⏳' : '✨'}
                         </button>
-                        <button onClick={() => setDeleteTarget(v.name)} title="Delete voice"
+                        <button onClick={() => setDeleteTarget(v.voice_id)} title="Delete voice"
                           style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'transparent', border: `1px solid ${t.rowBorder}`, color: t.labelColor, cursor: 'pointer', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
                           onMouseEnter={e => { e.currentTarget.style.background = '#ef444422'; e.currentTarget.style.borderColor = '#ef444455'; e.currentTarget.style.color = '#ef4444' }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = t.rowBorder; e.currentTarget.style.color = t.labelColor }}>🗑</button>
