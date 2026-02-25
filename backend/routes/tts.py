@@ -161,3 +161,55 @@ def get_audio(filename: str):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Audio not found")
     return FileResponse(path, media_type="audio/mpeg")
+
+@router.delete("/my-voices/{voice_id}")
+def delete_voice(
+    voice_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    voice = db.query(Voice).filter(
+        Voice.id == voice_id,
+        Voice.user_id == current_user.id
+    ).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+    # Delete file if exists
+    if os.path.exists(voice.file_path):
+        os.remove(voice.file_path)
+    db.delete(voice)
+    db.commit()
+    return {"message": "Voice deleted"}
+
+@router.delete("/my-history/{generation_id}")
+def delete_generation(
+    generation_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    generation = db.query(Generation).filter(
+        Generation.id == generation_id,
+        Generation.user_id == current_user.id
+    ).first()
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    if os.path.exists(generation.file_path):
+        os.remove(generation.file_path)
+    db.delete(generation)
+    db.commit()
+    return {"message": "Generation deleted"}
+
+@router.delete("/my-history")
+def clear_history(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    generations = db.query(Generation).filter(
+        Generation.user_id == current_user.id
+    ).all()
+    for g in generations:
+        if os.path.exists(g.file_path):
+            os.remove(g.file_path)
+        db.delete(g)
+    db.commit()
+    return {"message": "History cleared"}

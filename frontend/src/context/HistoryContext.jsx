@@ -55,14 +55,25 @@ export function HistoryProvider({ children }) {
     setHistory(prev => [newEntry, ...prev])
   }
 
-  function removeHistoryEntry(id) {
-    setHistory(prev => prev.filter(e => e.id !== id))
+  async function removeHistoryEntry(id) {
+  try {
+    await authFetch(`${BACKEND}/api/my-history/${id}`, { method: 'DELETE' })
+  } catch (err) {
+    console.error("Failed to delete generation:", err)
   }
+  setHistory(prev => prev.filter(e => e.id !== id))
+}
 
-  function clearHistory() {
-    setHistory([])
+async function clearHistory() {
+  try {
+    await authFetch(`${BACKEND}/api/my-history`, { method: 'DELETE' })
+  } catch (err) {
+    console.error("Failed to clear history:", err)
   }
+  setHistory([])
+}
 
+  
   return (
     <HistoryContext.Provider value={{
       history,

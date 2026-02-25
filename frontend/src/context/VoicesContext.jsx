@@ -55,9 +55,14 @@ export function VoicesProvider({ children }) {
     setClonedVoices(prev => [...prev, voice])
   }
 
-  function removeClonedVoice(voiceName) {
-    setClonedVoices(prev => prev.filter(v => v.name !== voiceName))
+  async function removeClonedVoice(voiceId) {
+  try {
+    await authFetch(`${BACKEND}/api/my-voices/${voiceId}`, { method: 'DELETE' })
+  } catch (err) {
+    console.error("Failed to delete voice:", err)
   }
+  setClonedVoices(prev => prev.filter(v => v.voice_id !== voiceId))
+}
 
   const allVoices = [...DEFAULT_VOICES, ...clonedVoices]
 
