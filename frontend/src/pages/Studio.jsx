@@ -122,6 +122,14 @@ function Studio() {
   }, [allVoices])
 
   useEffect(() => {
+    if (isIndianLang && voice?.type === 'custom') {
+      setGenerationWarning("Custom voices aren't supported for Indian languages. Using Anushka (default) instead.")
+    } else {
+      setGenerationWarning(null)
+    }
+  }, [isIndianLang, voice])
+
+  useEffect(() => {
     if (langMismatch && language === langMismatch) setLangMismatch(null)
   }, [language])
 
