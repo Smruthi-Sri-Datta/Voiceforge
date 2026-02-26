@@ -50,10 +50,10 @@ function OtpBoxes({ value, onChange, isDark }) {
 }
 
 export default function AuthModal({ reason }) {
-  const { loginWithGoogle, emailRegister, emailLogin, verifyOtp, resendOtp, closeAuthModal } = useAuth()
+  const { loginWithGoogle, emailRegister, emailLogin, verifyOtp, resendOtp, forgotPassword, resetPassword, closeAuthModal } = useAuth()
   const { isDark } = useTheme()
 
-  // 'main' | 'login' | 'register' | 'otp'
+  // 'main' | 'login' | 'register' | 'otp' | 'forgot' | 'reset'
   const [step, setStep]         = useState('main')
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
@@ -102,11 +102,11 @@ export default function AuthModal({ reason }) {
   async function handleRegister(e) {
     e.preventDefault(); clear()
     if (!name.trim()) { setError('Please enter your name.'); return }
-    if (password.length < 8)          { setError('Password must be at least 8 characters.'); return }
-    if (!/[A-Z]/.test(password))      { setError('Password must contain at least one uppercase letter.'); return }
-    if (!/[a-z]/.test(password))      { setError('Password must contain at least one lowercase letter.'); return }
-    if (!/[0-9]/.test(password))      { setError('Password must contain at least one number.'); return }
-    if (!/[!?<>@#$%^&*]/.test(password)) { setError('Password must contain at least one special character.'); return }
+    if (password.length < 8)              { setError('Password must be at least 8 characters.'); return }
+    if (!/[A-Z]/.test(password))          { setError('Password must contain at least one uppercase letter.'); return }
+    if (!/[a-z]/.test(password))          { setError('Password must contain at least one lowercase letter.'); return }
+    if (!/[0-9]/.test(password))          { setError('Password must contain at least one number.'); return }
+    if (!/[!?<>@#$%^&*]/.test(password))  { setError('Password must contain at least one special character.'); return }
     setLoading(true)
     try {
       await emailRegister(name.trim(), email, password)
@@ -144,6 +144,32 @@ export default function AuthModal({ reason }) {
     } catch (err) { setError(err.message) }
   }
 
+  async function handleForgotPassword(e) {
+    e.preventDefault(); clear(); setLoading(true)
+    try {
+      await forgotPassword(email)
+      setSuccess('Password reset code sent to your email.')
+      setStep('reset')
+    } catch (err) { setError(err.message) }
+    setLoading(false)
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault(); clear()
+    if (password.length < 8)              { setError('Password must be at least 8 characters.'); return }
+    if (!/[A-Z]/.test(password))          { setError('Password must contain an uppercase letter.'); return }
+    if (!/[a-z]/.test(password))          { setError('Password must contain a lowercase letter.'); return }
+    if (!/[0-9]/.test(password))          { setError('Password must contain a number.'); return }
+    if (!/[!?<>@#$%^&*]/.test(password))  { setError('Password must contain a special character.'); return }
+    setLoading(true)
+    try {
+      await resetPassword(email, otp, password)
+      setSuccess('Password reset! You can now sign in.')
+      setStep('login'); setPassword(''); setOtp('')
+    } catch (err) { setError(err.message) }
+    setLoading(false)
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)', fontFamily: "'Segoe UI', sans-serif", padding: '1rem' }}>
       <div style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: '20px', padding: '2rem', width: '100%', maxWidth: '370px', boxShadow: '0 24px 60px rgba(0,0,0,0.35)', position: 'relative' }}>
@@ -161,11 +187,15 @@ export default function AuthModal({ reason }) {
             {step === 'otp'      ? 'Verify your email'      :
              step === 'login'    ? 'Sign in'                :
              step === 'register' ? 'Create an account'      :
+             step === 'forgot'   ? 'Reset your password'    :
+             step === 'reset'    ? 'Set new password'       :
              reason === 'tts'    ? 'Free generation used'   :
              reason === 'clone'  ? 'Free clone used'        : 'Sign in to VoiceForge'}
           </div>
           <div style={{ fontSize: '0.78rem', color: t.labelColor, marginTop: '0.25rem' }}>
-            {step === 'otp'    ? `Code sent to ${email}` :
+            {step === 'otp'    ? `Code sent to ${email}`           :
+             step === 'reset'  ? `Code sent to ${email}`           :
+             step === 'forgot' ? 'Enter your email to get a code'  :
              step === 'main'   ? (reason ? 'Sign in for unlimited access' : 'Choose how to continue') : ''}
           </div>
         </div>
@@ -173,7 +203,6 @@ export default function AuthModal({ reason }) {
         {/* ── MAIN step ── */}
         {step === 'main' && (
           <>
-            {/* Perks card — only shown when triggered by credit exhaustion */}
             {reason && (
               <div style={{ background: t.rowBg, border: `1px solid ${t.cardBorder}`, borderRadius: '10px', padding: '0.85rem', marginBottom: '1.2rem' }}>
                 {['⚡ Unlimited TTS generations', '🎙️ Unlimited voice cloning', '🕑 History saved across sessions', '🌍 All 7 languages'].map((perk, i, arr) => (
@@ -182,7 +211,6 @@ export default function AuthModal({ reason }) {
               </div>
             )}
 
-            {/* Google */}
             <button onClick={loginWithGoogle}
               style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: `1px solid ${t.cardBorder}`, background: isDark ? '#1a1a2e' : '#ffffff', color: t.textColor, fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.7rem', transition: 'all 0.2s', fontFamily: "'Segoe UI', sans-serif", boxShadow: isDark ? 'none' : '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '0.75rem' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#7c3aed55'; e.currentTarget.style.background = isDark ? '#1e1a2e' : '#faf8ff' }}
@@ -190,14 +218,12 @@ export default function AuthModal({ reason }) {
               <GoogleIcon /> Continue with Google
             </button>
 
-            {/* Divider */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', marginBottom: '0.75rem' }}>
               <div style={{ flex: 1, height: '1px', background: t.divider }} />
               <span style={{ fontSize: '0.73rem', color: t.labelColor }}>or</span>
               <div style={{ flex: 1, height: '1px', background: t.divider }} />
             </div>
 
-            {/* Email sign in / sign up */}
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
               <button onClick={() => { setStep('login'); clear() }}
                 style={{ flex: 1, padding: '0.75rem', borderRadius: '9px', border: `1px solid ${t.cardBorder}`, background: 'transparent', color: t.textColor, fontSize: '0.86rem', fontWeight: '600', cursor: 'pointer', fontFamily: "'Segoe UI', sans-serif", transition: 'all 0.15s' }}
@@ -241,6 +267,55 @@ export default function AuthModal({ reason }) {
           </>
         )}
 
+        {/* ── Forgot Password step ── */}
+        {step === 'forgot' && (
+          <form onSubmit={handleForgotPassword}>
+            <div style={{ marginBottom: '0.9rem' }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', display: 'block', marginBottom: '0.35rem' }}>EMAIL</label>
+              <input type="email" placeholder="you@example.com" value={email} onChange={e => { setEmail(e.target.value); clear() }} style={inputStyle}
+                onFocus={e => e.target.style.borderColor = '#7c3aed'}
+                onBlur={e => e.target.style.borderColor = t.inputBorder} required />
+            </div>
+            <ErrorBox /><SuccessBox />
+            <button type="submit" disabled={loading} style={primaryBtn(loading)}>
+              {loading ? '⏳ Sending...' : 'Send Reset Code'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
+              <button type="button" onClick={() => { setStep('login'); clear() }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.labelColor, fontSize: '0.77rem' }}>← Back to sign in</button>
+            </div>
+          </form>
+        )}
+
+        {/* ── Reset Password step ── */}
+        {step === 'reset' && (
+          <form onSubmit={handleResetPassword}>
+            <div style={{ marginBottom: '1rem' }}>
+              <OtpBoxes value={otp} onChange={v => { setOtp(v); clear() }} isDark={isDark} />
+            </div>
+            <div style={{ marginBottom: '1.2rem' }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', display: 'block', marginBottom: '0.35rem' }}>NEW PASSWORD</label>
+              <div style={{ position: 'relative' }}>
+                <input type={showPass ? 'text' : 'password'} placeholder="At least 8 characters" value={password} onChange={e => { setPassword(e.target.value); clear() }} style={{ ...inputStyle, paddingRight: '2.6rem' }}
+                  onFocus={e => e.target.style.borderColor = '#7c3aed'}
+                  onBlur={e => e.target.style.borderColor = t.inputBorder} required />
+                <button type="button" onClick={() => setShowPass(p => !p)}
+                  style={{ position: 'absolute', right: '0.7rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: t.labelColor, fontSize: '0.82rem', padding: 0 }}>
+                  {showPass ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
+            <ErrorBox /><SuccessBox />
+            <button type="submit" disabled={loading || otp.length < 6} style={primaryBtn(loading || otp.length < 6)}>
+              {loading ? '⏳ Resetting...' : 'Reset Password'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
+              <button type="button" onClick={() => { setStep('login'); clear() }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.labelColor, fontSize: '0.77rem' }}>← Back to sign in</button>
+            </div>
+          </form>
+        )}
+
         {/* ── Login step ── */}
         {step === 'login' && (
           <form onSubmit={handleLogin}>
@@ -250,7 +325,7 @@ export default function AuthModal({ reason }) {
                 onFocus={e => e.target.style.borderColor = '#7c3aed'}
                 onBlur={e => e.target.style.borderColor = t.inputBorder} required />
             </div>
-            <div style={{ marginBottom: '1.2rem' }}>
+            <div style={{ marginBottom: '0.5rem' }}>
               <label style={{ fontSize: '0.72rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', display: 'block', marginBottom: '0.35rem' }}>PASSWORD</label>
               <div style={{ position: 'relative' }}>
                 <input type={showPass ? 'text' : 'password'} placeholder="Your password" value={password} onChange={e => { setPassword(e.target.value); clear() }} style={{ ...inputStyle, paddingRight: '2.6rem' }}
@@ -262,6 +337,15 @@ export default function AuthModal({ reason }) {
                 </button>
               </div>
             </div>
+
+            {/* Forgot password link */}
+            <div style={{ textAlign: 'right', marginBottom: '1.2rem' }}>
+              <button type="button" onClick={() => { setStep('forgot'); clear() }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a78bfa', fontSize: '0.77rem', fontWeight: '600', padding: 0 }}>
+                Forgot password?
+              </button>
+            </div>
+
             <ErrorBox /><SuccessBox />
             <button type="submit" disabled={loading} style={primaryBtn(loading)}>
               {loading ? '⏳ Signing in...' : 'Sign In'}
