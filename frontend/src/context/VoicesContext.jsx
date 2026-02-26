@@ -38,10 +38,11 @@ export function VoicesProvider({ children }) {
       if (!res.ok) return
       const data = await res.json()
       const voices = data.voices.map(v => ({
-        name:     v.name,
-        voice_id: v.voice_id,
-        color:    "#7c3aed",
-        type:     "custom",
+        name:      v.name,
+        voice_id:  v.voice_id,
+        audio_url: v.audio_url,   // ← add this
+        color:     "#7c3aed",
+        type:      "custom",
       }))
       setClonedVoices(voices)
     } catch (err) {

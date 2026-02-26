@@ -60,7 +60,7 @@ function generatePoeticDescription(name, metrics) {
 }
 
 function getAudioUrl(v) {
-  return v.previewUrl || `${BACKEND}/api/audio/${v.voice_id}.wav`
+  return v.audio_url || v.previewUrl || `${BACKEND}/api/audio/${v.voice_id}.wav`
 }
 
 function Voices() {
