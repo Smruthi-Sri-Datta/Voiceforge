@@ -143,6 +143,28 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  async function forgotPassword(email) {
+    const res  = await fetch(`${BACKEND}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Could not send reset code.')
+    return data
+  }
+
+  async function resetPassword(email, otp, password) {
+    const res  = await fetch(`${BACKEND}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Could not reset password.')
+    return data
+  }
+
   // ── Logout ────────────────────────────────────────────────
   function logout() {
     localStorage.removeItem(TOKEN_KEY)
@@ -185,6 +207,8 @@ export function AuthProvider({ children }) {
       emailLogin,
       verifyOtp,
       resendOtp,
+      forgotPassword,
+      resetPassword,
       logout,
       getToken,
       authFetch,

@@ -51,7 +51,6 @@ function OtpBoxes({ value, onChange }) {
   )
 }
 
-// ── Password Strength Checker ──────────────────────────────
 function PasswordStrength({ password }) {
   const checks = [
     { label: 'Uppercase letter',     pass: /[A-Z]/.test(password) },
@@ -60,9 +59,7 @@ function PasswordStrength({ password }) {
     { label: 'Special character (e.g. !?<>@#$%)', pass: /[!?<>@#$%^&*]/.test(password) },
     { label: '8 characters or more', pass: password.length >= 8 },
   ]
-
   if (!password) return null
-
   return (
     <div style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
       {checks.map(({ label, pass }) => (
@@ -76,11 +73,11 @@ function PasswordStrength({ password }) {
 }
 
 export default function Login() {
-  const { loginWithGoogle, emailRegister, emailLogin, verifyOtp, resendOtp } = useAuth()
+  const { loginWithGoogle, emailRegister, emailLogin, verifyOtp, resendOtp, forgotPassword, resetPassword } = useAuth()
   const { isDark } = useTheme()
 
-  const [mode, setMode]         = useState('login')    // 'login' | 'register' | 'otp'
-  const [authTab, setAuthTab]   = useState('email')    // 'email' | 'google'
+  const [mode, setMode]         = useState('login')  // 'login' | 'register' | 'otp' | 'forgot' | 'reset'
+  const [authTab, setAuthTab]   = useState('email')  // 'email' | 'google'
 
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
@@ -128,11 +125,11 @@ export default function Login() {
   async function handleRegister(e) {
     e.preventDefault(); clear()
     if (!name.trim()) { setError('Please enter your name.'); return }
-    if (password.length < 8)          { setError('Password must be at least 8 characters.'); return }
-    if (!/[A-Z]/.test(password))      { setError('Password must contain at least one uppercase letter.'); return }
-    if (!/[a-z]/.test(password))      { setError('Password must contain at least one lowercase letter.'); return }
-    if (!/[0-9]/.test(password))      { setError('Password must contain at least one number.'); return }
-    if (!/[!?<>@#$%^&*]/.test(password)) { setError('Password must contain at least one special character.'); return }
+    if (password.length < 8)              { setError('Password must be at least 8 characters.'); return }
+    if (!/[A-Z]/.test(password))          { setError('Password must contain at least one uppercase letter.'); return }
+    if (!/[a-z]/.test(password))          { setError('Password must contain at least one lowercase letter.'); return }
+    if (!/[0-9]/.test(password))          { setError('Password must contain at least one number.'); return }
+    if (!/[!?<>@#$%^&*]/.test(password))  { setError('Password must contain at least one special character.'); return }
     setLoading(true)
     try { await emailRegister(name.trim(), email, password); setMode('otp'); setSuccess('Check your email for a 6-digit code.') }
     catch (err) { setError(err.message) }
@@ -167,6 +164,32 @@ export default function Login() {
     } catch (err) { setError(err.message) }
   }
 
+  async function handleForgotPassword(e) {
+    e.preventDefault(); clear(); setLoading(true)
+    try {
+      await forgotPassword(email)
+      setSuccess('Password reset code sent to your email.')
+      setMode('reset')
+    } catch (err) { setError(err.message) }
+    setLoading(false)
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault(); clear()
+    if (password.length < 8)              { setError('Password must be at least 8 characters.'); return }
+    if (!/[A-Z]/.test(password))          { setError('Password must contain an uppercase letter.'); return }
+    if (!/[a-z]/.test(password))          { setError('Password must contain a lowercase letter.'); return }
+    if (!/[0-9]/.test(password))          { setError('Password must contain a number.'); return }
+    if (!/[!?<>@#$%^&*]/.test(password))  { setError('Password must contain a special character.'); return }
+    setLoading(true)
+    try {
+      await resetPassword(email, otp, password)
+      setSuccess('Password reset! You can now sign in.')
+      setMode('login'); setPassword(''); setOtp('')
+    } catch (err) { setError(err.message) }
+    setLoading(false)
+  }
+
   const ErrorBox   = () => error   ? <div style={{ marginBottom: '1rem', padding: '0.7rem 0.9rem', background: isDark ? '#2a1a1a' : '#fff5f5', border: `1px solid ${isDark ? '#7f1d1d' : '#fecaca'}`, borderRadius: '8px', color: '#ef4444', fontSize: '0.82rem' }}>⚠️ {error}</div> : null
   const SuccessBox = () => success ? <div style={{ marginBottom: '1rem', padding: '0.7rem 0.9rem', background: isDark ? '#0f2a1a' : '#f0fdf4', border: `1px solid ${isDark ? '#14532d' : '#bbf7d0'}`, borderRadius: '8px', color: '#22c55e', fontSize: '0.82rem' }}>✅ {success}</div> : null
 
@@ -181,8 +204,10 @@ export default function Login() {
           <div style={{ width: '52px', height: '52px', background: 'linear-gradient(135deg, #7c3aed, #a855f7)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 1rem', boxShadow: '0 8px 24px rgba(124,58,237,0.35)' }}>🎙️</div>
           <div style={{ fontSize: '1.5rem', fontWeight: '700', color: t.textColor }}>VoiceForge</div>
           <div style={{ fontSize: '0.85rem', color: t.labelColor, marginTop: '0.3rem' }}>
-            {mode === 'otp'      ? 'Enter your verification code'  :
-             mode === 'register' ? 'Create your account'           : 'Sign in to continue'}
+            {mode === 'otp'      ? 'Enter your verification code' :
+             mode === 'register' ? 'Create your account'          :
+             mode === 'forgot'   ? 'Reset your password'          :
+             mode === 'reset'    ? 'Enter your new password'      : 'Sign in to continue'}
           </div>
         </div>
 
@@ -219,8 +244,75 @@ export default function Login() {
           </>
         )}
 
+        {/* ── Forgot Password step ── */}
+        {mode === 'forgot' && (
+          <form onSubmit={handleForgotPassword}>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔐</div>
+              <div style={{ fontSize: '0.85rem', color: t.labelColor, lineHeight: '1.7' }}>
+                Enter your email and we'll send you a reset code.
+              </div>
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', display: 'block', marginBottom: '0.4rem' }}>EMAIL</label>
+              <input type="email" placeholder="you@example.com" value={email} onChange={e => { setEmail(e.target.value); clear() }} style={inputStyle}
+                onFocus={e => e.target.style.borderColor = '#7c3aed'}
+                onBlur={e => e.target.style.borderColor = t.inputBorder} required />
+            </div>
+            <ErrorBox /><SuccessBox />
+            <button type="submit" disabled={loading} style={primaryBtn(loading)}>
+              {loading ? '⏳ Sending...' : 'Send Reset Code'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button onClick={() => { setMode('login'); clear() }} type="button"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.labelColor, fontSize: '0.8rem' }}>
+                ← Back to sign in
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ── Reset Password step ── */}
+        {mode === 'reset' && (
+          <form onSubmit={handleResetPassword}>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔑</div>
+              <div style={{ fontSize: '0.85rem', color: t.labelColor, lineHeight: '1.7' }}>
+                Enter the code sent to<br />
+                <strong style={{ color: t.textColor }}>{email}</strong>
+              </div>
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <OtpBoxes value={otp} onChange={v => { setOtp(v); clear() }} />
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', display: 'block', marginBottom: '0.4rem' }}>NEW PASSWORD</label>
+              <div style={{ position: 'relative' }}>
+                <input type={showPass ? 'text' : 'password'} placeholder="At least 8 characters" value={password} onChange={e => { setPassword(e.target.value); clear() }} style={{ ...inputStyle, paddingRight: '2.8rem' }}
+                  onFocus={e => e.target.style.borderColor = '#7c3aed'}
+                  onBlur={e => e.target.style.borderColor = t.inputBorder} required />
+                <button type="button" onClick={() => setShowPass(p => !p)}
+                  style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: t.labelColor, fontSize: '0.85rem', padding: 0 }}>
+                  {showPass ? '🙈' : '👁️'}
+                </button>
+              </div>
+              <PasswordStrength password={password} />
+            </div>
+            <ErrorBox /><SuccessBox />
+            <button type="submit" disabled={loading || otp.length < 6} style={primaryBtn(loading || otp.length < 6)}>
+              {loading ? '⏳ Resetting...' : 'Reset Password'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button onClick={() => { setMode('login'); clear() }} type="button"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.labelColor, fontSize: '0.8rem' }}>
+                ← Back to sign in
+              </button>
+            </div>
+          </form>
+        )}
+
         {/* ── Login / Register steps ── */}
-        {mode !== 'otp' && (
+        {(mode === 'login' || mode === 'register') && (
           <>
             {/* Tabs */}
             <div style={{ display: 'flex', background: t.tabBg, borderRadius: '11px', padding: '3px', marginBottom: '1.6rem', gap: '3px' }}>
@@ -266,8 +358,7 @@ export default function Login() {
                     onBlur={e => e.target.style.borderColor = t.inputBorder} required />
                 </div>
 
-                {/* ── PASSWORD FIELD + STRENGTH CHECKER ── */}
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: mode === 'login' ? '0.5rem' : '1.5rem' }}>
                   <label style={{ fontSize: '0.75rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', display: 'block', marginBottom: '0.4rem' }}>PASSWORD</label>
                   <div style={{ position: 'relative' }}>
                     <input type={showPass ? 'text' : 'password'} placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'} value={password} onChange={e => { setPassword(e.target.value); clear() }} style={{ ...inputStyle, paddingRight: '2.8rem' }}
@@ -278,9 +369,18 @@ export default function Login() {
                       {showPass ? '🙈' : '👁️'}
                     </button>
                   </div>
-                  {/* Shows only on register mode, only when user starts typing */}
                   {mode === 'register' && <PasswordStrength password={password} />}
                 </div>
+
+                {/* Forgot password link — login only */}
+                {mode === 'login' && (
+                  <div style={{ textAlign: 'right', marginBottom: '1.5rem' }}>
+                    <button onClick={() => { setMode('forgot'); clear() }} type="button"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a78bfa', fontSize: '0.8rem', fontWeight: '600', padding: 0 }}>
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
 
                 <ErrorBox /><SuccessBox />
 
