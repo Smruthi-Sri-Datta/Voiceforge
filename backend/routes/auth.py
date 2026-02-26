@@ -330,6 +330,59 @@ async def resend_otp(body: ResendOTPRequest, db: Session = Depends(get_db)):
     send_otp_email(body.email, user.name, otp)
     return {"message": "A new verification code has been sent."}
 
+    # ── Forgot Password ───────────────────────────────────────────
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    otp:      str
+    password: str
+
+@router.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with this email.")
+    if not user.password_hash:
+        raise HTTPException(status_code=400, detail="This account uses Google login. Please sign in with Google.")
+    otp = generate_otp()
+    user.otp_code       = otp
+    user.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRY_MINUTES)
+    db.commit()
+    send_otp_email(body.email, user.name, otp)
+    return {"message": "Password reset code sent to your email."}
+
+@router.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Account not found.")
+    now     = datetime.now(timezone.utc)
+    otp_exp = user.otp_expires_at
+    if otp_exp and otp_exp.tzinfo is None:
+        otp_exp = otp_exp.replace(tzinfo=timezone.utc)
+    if not user.otp_code or user.otp_code != body.otp:
+        raise HTTPException(status_code=400, detail="Incorrect verification code.")
+    if not otp_exp or now > otp_exp:
+        raise HTTPException(status_code=400, detail="Code has expired. Please request a new one.")
+    # Validate new password
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    if not re.search(r'[A-Z]', body.password):
+        raise HTTPException(status_code=400, detail="Password must contain an uppercase letter.")
+    if not re.search(r'[a-z]', body.password):
+        raise HTTPException(status_code=400, detail="Password must contain a lowercase letter.")
+    if not re.search(r'[0-9]', body.password):
+        raise HTTPException(status_code=400, detail="Password must contain a number.")
+    if not re.search(r'[!?<>@#$%^&*]', body.password):
+        raise HTTPException(status_code=400, detail="Password must contain a special character.")
+    user.password_hash  = pwd_ctx.hash(body.password)
+    user.otp_code       = None
+    user.otp_expires_at = None
+    db.commit()
+    return {"message": "Password reset successful! You can now log in with your new password."}
+
 
 # ── Shared ────────────────────────────────────────────────────
 @router.get("/auth/me")
