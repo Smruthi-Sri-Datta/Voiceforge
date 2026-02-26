@@ -44,7 +44,7 @@ const SUGGESTIONS = [
 ]
 
 function getAudioUrl(v) {
-  return v.previewUrl || `${BACKEND}/api/audio/${v.voice_id}`
+  return v.audio_url || v.previewUrl || `${BACKEND}/api/audio/${v.voice_id}.wav`
 }
 
 function detectScriptLanguage(text) {
