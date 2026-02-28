@@ -4,10 +4,12 @@ import { useVoices } from '../context/VoicesContext'
 import { useHistory } from '../context/HistoryContext'
 import { useAuth } from '../context/AuthContext'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://voiceforge-4v8l.onrender.com'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
+// ── Indian language codes (routed to Sarvam internally) ───────
 const INDIAN_LANG_CODES = ["hi", "bn", "ta", "te", "gu", "kn", "ml", "mr", "pa", "or"]
 
+// ── Indian language voices ────────────────────────────────────
 const INDIAN_VOICES = [
   { name: "Anushka", color: "#e879f9", desc: "Warm, expressive female voice"      },
   { name: "Abhilash", color: "#60a5fa", desc: "Clear, authoritative male voice"   },
@@ -17,6 +19,7 @@ const INDIAN_VOICES = [
   { name: "Hitesh",   color: "#a78bfa", desc: "Professional, clear male voice"    },
 ]
 
+// ── XTTS voice metadata ───────────────────────────────────────
 const VOICE_META = {
   "Ana Florence":    { desc: "Steady, rich narrator with a smooth darker tone",        previewText: "The ancient city slept beneath a thousand stars, each one holding a secret the night refused to tell." },
   "Claribel Dervla": { desc: "Composed, deep voice with authoritative clarity",         previewText: "Ladies and gentlemen, the evidence speaks for itself. The truth, as always, needs no introduction." },
@@ -65,39 +68,45 @@ function Studio() {
   const [languages, setLanguages]                 = useState([])
   const [showLangMenu, setShowLangMenu]           = useState(false)
   const [speed, setSpeed]                         = useState(1.0)
-  const [jobStatus, setJobStatus]                 = useState(null)
   const [loading, setLoading]                     = useState(false)
   const [hoveredChip, setHoveredChip]             = useState(null)
   const [generationError, setGenerationError]     = useState(null)
   const [generationWarning, setGenerationWarning] = useState(null)
-  const [panelMode, setPanelMode]                 = useState('settings')
-  const [voiceTab, setVoiceTab]                   = useState('default')
-  const [voiceSearch, setVoiceSearch]             = useState('')
-  const [bottomBar, setBottomBar]                 = useState(null)
-  const [previewLoading, setPreviewLoading]       = useState(null)
-  const [previewCache, setPreviewCache]           = useState({})
-  const [langMismatch, setLangMismatch]           = useState(null)
 
+  const [panelMode, setPanelMode]       = useState('settings')
+  const [voiceTab, setVoiceTab]         = useState('default')
+  const [voiceSearch, setVoiceSearch]   = useState('')
+
+  const [bottomBar, setBottomBar]             = useState(null)
+  const [previewLoading, setPreviewLoading]   = useState(null)
+  const [previewCache, setPreviewCache]       = useState({})
+  const [langMismatch, setLangMismatch]       = useState(null)
+
+  // ── Derived ───────────────────────────────────────────────────
   const isIndianLang        = INDIAN_LANG_CODES.includes(language)
   const charLimit           = isIndianLang ? 2500 : 5000
   const charWarnAt          = isIndianLang ? 2200 : 4500
   const activeDefaultVoices = isIndianLang ? INDIAN_VOICES : DEFAULT_VOICES
 
+  // ── Fetch languages from backend on mount ─────────────────────
   useEffect(() => {
     fetch(`${BACKEND}/api/languages`)
       .then(r => r.json())
       .then(data => setLanguages(data.languages))
-      .catch(() => setLanguages([
-        { code: "en",    name: "🇬🇧 English",   engine: "xtts"   },
-        { code: "hi",    name: "🇮🇳 Hindi",     engine: "sarvam" },
-        { code: "fr",    name: "🇫🇷 French",    engine: "xtts"   },
-        { code: "de",    name: "🇩🇪 German",    engine: "xtts"   },
-        { code: "es",    name: "🇪🇸 Spanish",   engine: "xtts"   },
-        { code: "ja",    name: "🇯🇵 Japanese",  engine: "xtts"   },
-        { code: "zh-cn", name: "🇨🇳 Chinese",   engine: "xtts"   },
-      ]))
+      .catch(() => {
+        setLanguages([
+          { code: "en",    name: "🇬🇧 English",   engine: "xtts"   },
+          { code: "hi",    name: "🇮🇳 Hindi",     engine: "sarvam" },
+          { code: "fr",    name: "🇫🇷 French",    engine: "xtts"   },
+          { code: "de",    name: "🇩🇪 German",    engine: "xtts"   },
+          { code: "es",    name: "🇪🇸 Spanish",   engine: "xtts"   },
+          { code: "ja",    name: "🇯🇵 Japanese",  engine: "xtts"   },
+          { code: "zh-cn", name: "🇨🇳 Chinese",   engine: "xtts"   },
+        ])
+      })
   }, [])
 
+  // ── Auto-select voice when language changes ───────────────────
   useEffect(() => {
     if (isIndianLang) {
       setVoice({ ...INDIAN_VOICES[0], type: 'indian' })
@@ -157,9 +166,9 @@ function Studio() {
     setGenerationError(null)
     setGenerationWarning(null)
     setLoading(true)
-    setJobStatus(null)
     setBottomBar(null)
     try {
+      // Step 1: Submit job — returns job_id immediately
       const submitRes = await authFetch(`${BACKEND}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -179,14 +188,17 @@ function Studio() {
       }
       const { job_id } = await submitRes.json()
 
+      // Step 2: Poll /api/status/{job_id} every 3 seconds
       let attempts = 0
-      while (attempts < 100) {
-        await new Promise(r => setTimeout(r, 3000))
+      const maxAttempts = 100  // 5 minutes max
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 3000))  // wait 3s
         attempts++
+
         const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
         if (!statusRes.ok) continue
+
         const result = await statusRes.json()
-        setJobStatus(result.status)
 
         if (result.status === "COMPLETED") {
           const url = result.audio_url
@@ -201,25 +213,23 @@ function Studio() {
           setLoading(false)
           return
         }
+
         if (result.status === "FAILED") {
           setGenerationError(result.error || "Generation failed on RunPod.")
           setLoading(false)
           return
         }
+        // IN_QUEUE or IN_PROGRESS — keep polling
       }
+
       setGenerationError("Generation timed out. Please try again.")
-    } catch (err) {
-      console.error("[Generate] caught error:", err)
-      const msg = err?.message || String(err)
-      if (msg.includes("401") || msg.includes("token") || msg.includes("auth")) {
-        setGenerationError("Session expired. Please sign out and sign back in.")
-      } else {
-        setGenerationError(`Error: ${msg}`)
-      }
+    } catch {
+      setGenerationError("Could not reach the backend. Make sure the server is running.")
     }
     setLoading(false)
   }
 
+  // ── Generate with mismatch check + credit gate ────────────────
   async function generateAudio() {
     if (!text.trim()) return
     if (!useGuestCredit('tts')) return
@@ -231,61 +241,41 @@ function Studio() {
     await _doGenerate()
   }
 
-  // ── FIX 1: Blob download (cross-origin <a download> doesn't work) ──
-  async function downloadAudio(url) {
-    try {
-      const r = await fetch(url)
-      const blob = await r.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = 'voiceforge-audio.mp3'
-      a.click()
-      URL.revokeObjectURL(a.href)
-    } catch { console.error("Download failed") }
+ async function handlePreview(v) {
+  if (previewCache[v.name]) {
+    setBottomBar({ url: previewCache[v.name], label: v.name, color: v.color, isPreview: true })
+    return
   }
+  setPreviewLoading(v.name)
+  try {
+    const previewText = VOICE_META[v.name]?.previewText || `Hi, I'm ${v.name}. How can I help you today?`
+    const response = await authFetch(`${BACKEND}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
+    })
+    const data = await response.json()
+    const job_id = data.job_id
+    if (!job_id) throw new Error("No job_id returned")
 
-  // ── FIX 2: Preview passes is_preview=true + voice_id for cloned voices ──
-  async function handlePreview(v) {
-    if (previewCache[v.name]) {
-      setBottomBar({ url: previewCache[v.name], label: v.name, color: v.color, isPreview: true })
-      return
-    }
-    setPreviewLoading(v.name)
-    try {
-      const previewText = VOICE_META[v.name]?.previewText || `Hi, I'm ${v.name}. How can I help you today?`
-      const response = await authFetch(`${BACKEND}/api/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text:       previewText,
-          speaker:    v.name,
-          language:   "en",
-          speed:      1.0,
-          is_preview: true,                                      // ← skip DB save
-          voice_id:   v.type === 'custom' ? v.voice_id : null,  // ← cloned voice
-        })
-      })
-      const data = await response.json()
-      const job_id = data.job_id
-      if (!job_id) throw new Error("No job_id returned")
-
-      let attempts = 0
-      while (attempts < 100) {
-        await new Promise(r => setTimeout(r, 3000))
-        attempts++
-        const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
-        const result = await statusRes.json()
-        if (result.status === "COMPLETED") {
-          const url = result.audio_url
-          setPreviewCache(prev => ({ ...prev, [v.name]: url }))
-          setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
-          break
-        }
-        if (result.status === "FAILED") break
+    // Poll for result
+    let attempts = 0
+    while (attempts < 100) {
+      await new Promise(r => setTimeout(r, 3000))
+      attempts++
+      const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
+      const result = await statusRes.json()
+      if (result.status === "COMPLETED") {
+        const url = result.audio_url
+        setPreviewCache(prev => ({ ...prev, [v.name]: url }))
+        setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
+        break
       }
-    } catch { console.error("Preview failed") }
-    setPreviewLoading(null)
-  }
+      if (result.status === "FAILED") break
+    }
+  } catch { console.error("Preview failed") }
+  setPreviewLoading(null)
+ }
 
   function selectVoice(v) {
     setVoice(v)
@@ -304,7 +294,7 @@ function Studio() {
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 4rem)', margin: '-2rem', background: t.bg }}>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
-        {/* ── CENTER ── */}
+        {/* ── CENTER — Editor ── */}
         <div style={{ flex: 6, display: 'flex', flexDirection: 'column', minWidth: 0, background: t.centerBg }}>
           <div style={{ padding: '1.5rem 2.5rem 0', fontSize: '0.9rem', fontWeight: '600', color: t.labelMid, letterSpacing: '0.2px' }}>
             Text to Speech
@@ -312,7 +302,14 @@ function Studio() {
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0 2.5rem', overflowY: 'auto' }}>
             <textarea
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: hoveredChip !== null ? t.labelColor : t.textColor, fontSize: '1rem', lineHeight: '1.9', resize: 'none', fontFamily: "'Segoe UI', sans-serif", fontStyle: hoveredChip !== null ? 'italic' : 'normal', paddingTop: '2rem', minHeight: '200px' }}
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                color: hoveredChip !== null ? t.labelColor : t.textColor,
+                fontSize: '1rem', lineHeight: '1.9', resize: 'none',
+                fontFamily: "'Segoe UI', sans-serif",
+                fontStyle: hoveredChip !== null ? 'italic' : 'normal',
+                paddingTop: '2rem', minHeight: '200px',
+              }}
               placeholder="Start typing here or paste any text you want to turn into lifelike speech..."
               value={displayText}
               onChange={(e) => {
@@ -340,6 +337,7 @@ function Studio() {
             )}
           </div>
 
+          {/* Generation error */}
           {generationError && (
             <div style={{ margin: '0 2.5rem 0.75rem', padding: '0.85rem 1rem', background: isDark ? '#2a1a1a' : '#fff5f5', border: `1px solid ${isDark ? '#7f1d1d' : '#fecaca'}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
               <div style={{ fontSize: '0.83rem', color: '#ef4444', lineHeight: '1.5' }}>⚠️ {generationError}</div>
@@ -347,6 +345,7 @@ function Studio() {
             </div>
           )}
 
+          {/* Romanized script warning */}
           {generationWarning && (
             <div style={{ margin: '0 2.5rem 0.75rem', padding: '0.85rem 1rem', background: isDark ? '#1c1500' : '#fffbeb', border: `1px solid ${isDark ? '#7c6400' : '#fcd34d'}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
               <div style={{ fontSize: '0.83rem', color: isDark ? '#fcd34d' : '#92400e', lineHeight: '1.5' }}>⚠️ {generationWarning}</div>
@@ -354,6 +353,7 @@ function Studio() {
             </div>
           )}
 
+          {/* Language mismatch */}
           {langMismatch && (
             <div style={{ margin: '0 2.5rem 0.75rem', padding: '0.85rem 1rem', background: isDark ? '#1c1500' : '#fffbeb', border: `1px solid ${isDark ? '#7c6400' : '#fcd34d'}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
               <div style={{ fontSize: '0.83rem', color: isDark ? '#fcd34d' : '#92400e', lineHeight: '1.5' }}>
@@ -387,13 +387,15 @@ function Studio() {
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <button onClick={() => { if (bottomBar?.url) window.open(bottomBar.url) }}
+                disabled={!bottomBar?.url || bottomBar?.isPreview}
+                title="Download audio"
+                style={{ width: '38px', height: '38px', borderRadius: '8px', border: `1px solid ${t.rowBorder}`, background: 'transparent', color: bottomBar?.url && !bottomBar?.isPreview ? t.textColor : t.labelColor, cursor: bottomBar?.url && !bottomBar?.isPreview ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem', transition: 'all 0.15s' }}>
+                ⬇
+              </button>
               <button onClick={generateAudio} disabled={loading || !text.trim() || text.length > charLimit}
                 style={{ padding: '0.65rem 1.8rem', borderRadius: '8px', border: 'none', fontSize: '0.88rem', fontWeight: '700', cursor: loading || !text.trim() || text.length > charLimit ? 'not-allowed' : 'pointer', background: loading || !text.trim() || text.length > charLimit ? (isDark ? '#1e1e2e' : '#e5e5e8') : 'linear-gradient(135deg, #7c3aed, #a855f7)', color: loading || !text.trim() || text.length > charLimit ? (isDark ? '#444' : '#aaa') : 'white', boxShadow: loading || !text.trim() ? 'none' : '0 4px 16px rgba(124,58,237,0.25)', transition: 'all 0.2s ease', whiteSpace: 'nowrap' }}>
-                {loading
-                  ? jobStatus === "IN_QUEUE"    ? "⏳ In queue..."
-                  : jobStatus === "IN_PROGRESS" ? "🔄 Generating..."
-                  : "⏳ Starting..."
-                  : "⚡ Generate Audio"}
+                {loading ? "⏳ Generating..." : "⚡ Generate Audio"}
               </button>
             </div>
           </div>
@@ -402,6 +404,7 @@ function Studio() {
         {/* ── RIGHT PANEL ── */}
         <div style={{ flex: 4, borderLeft: `1px solid ${t.panelBorder}`, display: 'flex', flexDirection: 'column', background: t.panelBg, position: 'relative', minWidth: 0 }}>
 
+          {/* Settings mode */}
           {panelMode === 'settings' && (
             <div style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
               <div style={{ fontSize: '0.72rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.8px', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Voice</div>
@@ -426,6 +429,7 @@ function Studio() {
 
               <div style={{ borderTop: `1px solid ${t.divider}`, marginBottom: '1.8rem' }} />
 
+              {/* Language selector */}
               <div style={{ fontSize: '0.72rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.8px', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Language</div>
               <div style={{ position: 'relative', marginBottom: '1.8rem' }}>
                 <div onClick={() => setShowLangMenu(!showLangMenu)}
@@ -435,22 +439,30 @@ function Studio() {
                 </div>
                 {showLangMenu && (
                   <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 100, background: t.menuBg, border: `1px solid ${t.menuBorder}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.14)', maxHeight: '300px', overflowY: 'auto' }}>
+
+                    {/* Global languages */}
                     <div style={{ padding: '0.4rem 1rem 0.2rem', fontSize: '0.68rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Global Languages</div>
                     {globalLangs.map(l => (
                       <div key={l.code} onClick={() => { setLanguage(l.code); setShowLangMenu(false) }}
                         style={{ padding: '0.7rem 1rem', cursor: 'pointer', fontSize: '0.88rem', color: t.textColor, background: language === l.code ? t.menuHover : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                         onMouseEnter={e => e.currentTarget.style.background = t.menuHover}
                         onMouseLeave={e => e.currentTarget.style.background = language === l.code ? t.menuHover : 'transparent'}>
-                        {l.name} {language === l.code && <span style={{ color: '#a78bfa', fontSize: '0.8rem' }}>✓</span>}
+                        {l.name}
+                        {language === l.code && <span style={{ color: '#a78bfa', fontSize: '0.8rem' }}>✓</span>}
                       </div>
                     ))}
-                    <div style={{ padding: '0.4rem 1rem 0.2rem', fontSize: '0.68rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', textTransform: 'uppercase', borderTop: `1px solid ${t.divider}`, marginTop: '0.3rem' }}>🇮🇳 Indian Languages</div>
+
+                    {/* Indian languages */}
+                    <div style={{ padding: '0.4rem 1rem 0.2rem', fontSize: '0.68rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', textTransform: 'uppercase', borderTop: `1px solid ${t.divider}`, marginTop: '0.3rem' }}>
+                      🇮🇳 Indian Languages
+                    </div>
                     {indianLangs.map(l => (
                       <div key={l.code} onClick={() => { setLanguage(l.code); setShowLangMenu(false) }}
                         style={{ padding: '0.7rem 1rem', cursor: 'pointer', fontSize: '0.88rem', color: t.textColor, background: language === l.code ? t.menuHover : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                         onMouseEnter={e => e.currentTarget.style.background = t.menuHover}
                         onMouseLeave={e => e.currentTarget.style.background = language === l.code ? t.menuHover : 'transparent'}>
-                        {l.name} {language === l.code && <span style={{ color: '#a78bfa', fontSize: '0.8rem' }}>✓</span>}
+                        {l.name}
+                        {language === l.code && <span style={{ color: '#a78bfa', fontSize: '0.8rem' }}>✓</span>}
                       </div>
                     ))}
                   </div>
@@ -459,6 +471,7 @@ function Studio() {
 
               <div style={{ borderTop: `1px solid ${t.divider}`, marginBottom: '1.8rem' }} />
 
+              {/* Speed */}
               <div style={{ fontSize: '0.72rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.8px', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Speed</div>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
@@ -473,6 +486,7 @@ function Studio() {
             </div>
           )}
 
+          {/* Explorer mode */}
           {panelMode === 'explorer' && (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               <div style={{ padding: '1.5rem 1.8rem 0', borderBottom: `1px solid ${t.divider}` }}>
@@ -483,8 +497,8 @@ function Studio() {
                 </div>
                 <div style={{ display: 'flex' }}>
                   {[
-                    { key: 'default', label: 'Default',    count: activeDefaultVoices.length },
-                    { key: 'cloned',  label: 'My Voices',  count: clonedVoices.length }
+                    { key: 'default', label: 'Default', count: activeDefaultVoices.length },
+                    { key: 'cloned',  label: 'My Voices', count: clonedVoices.length }
                   ].map(tab => (
                     <button key={tab.key} onClick={() => { setVoiceTab(tab.key); setVoiceSearch('') }}
                       style={{ background: 'transparent', border: 'none', borderBottom: voiceTab === tab.key ? '2px solid #7c3aed' : '2px solid transparent', padding: '0.5rem 1rem', marginBottom: '-1px', color: voiceTab === tab.key ? t.tabActive : t.tabInactive, fontWeight: voiceTab === tab.key ? '600' : '400', fontSize: '0.85rem', cursor: 'pointer', fontFamily: "'Segoe UI', sans-serif", display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.15s' }}>
@@ -516,7 +530,8 @@ function Studio() {
                           style={{ width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0, background: `radial-gradient(circle at 35% 35%, ${v.color}cc, ${v.color}44)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '700', fontSize: '0.88rem' }}>{v.name[0]}</div>
                         <div style={{ flex: 1, minWidth: 0 }} onClick={() => selectVoice({ ...v, type: isIndianLang ? 'indian' : 'default' })}>
                           <div style={{ fontWeight: '600', fontSize: '0.88rem', color: t.textColor, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            {v.name} {voice?.name === v.name && <span style={{ color: '#a78bfa', fontSize: '0.72rem', fontWeight: '700' }}>✓</span>}
+                            {v.name}
+                            {voice?.name === v.name && <span style={{ color: '#a78bfa', fontSize: '0.72rem', fontWeight: '700' }}>✓</span>}
                           </div>
                           <div style={{ fontSize: '0.74rem', color: t.labelColor, marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {v.desc || VOICE_META[v.name]?.desc || "Default voice"}
@@ -551,17 +566,16 @@ function Studio() {
                         <div onClick={() => selectVoice(v)} style={{ width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0, background: `radial-gradient(circle at 35% 35%, ${v.color}cc, ${v.color}44)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '700', fontSize: '0.88rem' }}>{v.name[0]}</div>
                         <div style={{ flex: 1, minWidth: 0 }} onClick={() => selectVoice(v)}>
                           <div style={{ fontWeight: '600', fontSize: '0.88rem', color: t.textColor, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            {v.name} {voice?.name === v.name && <span style={{ color: '#a78bfa', fontSize: '0.72rem' }}>✓</span>}
+                            {v.name}
+                            {voice?.name === v.name && <span style={{ color: '#a78bfa', fontSize: '0.72rem' }}>✓</span>}
                           </div>
                           <div style={{ fontSize: '0.74rem', color: t.labelColor, marginTop: '0.15rem' }}>Custom cloned voice</div>
                         </div>
                         <span style={{ background: '#7c3aed18', color: '#a78bfa', padding: '0.15rem 0.5rem', borderRadius: '20px', fontSize: '0.68rem', border: '1px solid #7c3aed33', flexShrink: 0 }}>Custom</span>
-                        <button onClick={e => { e.stopPropagation(); handlePreview(v) }} disabled={previewLoading === v.name} title="Preview"
-                          style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'transparent', border: 'none', color: previewLoading === v.name ? t.labelColor : t.labelMid, cursor: previewLoading === v.name ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', flexShrink: 0 }}
+                        <button onClick={e => { e.stopPropagation(); setBottomBar({ url: getAudioUrl(v), label: v.name, color: v.color, isPreview: true }) }} title="Preview"
+                          style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'transparent', border: 'none', color: t.labelMid, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', flexShrink: 0 }}
                           onMouseEnter={e => { e.currentTarget.style.background = isDark ? '#2a2a4a' : '#ebebeb'; e.currentTarget.style.color = t.textColor }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = t.labelMid }}>
-                          {previewLoading === v.name ? '⏳' : '▶'}
-                        </button>
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = t.labelMid }}>▶</button>
                       </div>
                     ))
                 )}
@@ -571,7 +585,7 @@ function Studio() {
         </div>
       </div>
 
-      {/* ── Bottom audio bar ── */}
+      {/* Bottom audio bar */}
       {bottomBar && (
         <div style={{ borderTop: `1px solid ${t.bottomBarBorder}`, background: t.bottomBarBg, padding: '0.7rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0, boxShadow: isDark ? '0 -4px 20px rgba(0,0,0,0.3)' : '0 -4px 20px rgba(0,0,0,0.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0, minWidth: '170px' }}>
@@ -581,19 +595,8 @@ function Studio() {
               <div style={{ fontSize: '0.7rem', color: t.labelColor }}>{bottomBar.isPreview ? '🎧 Voice preview' : '✨ Generated audio'}</div>
             </div>
           </div>
-
           <audio controls autoPlay src={bottomBar.url} style={{ flex: 1, height: '34px' }} />
-
-          {/* FIX 3: Blob download button — cross-origin <a download> doesn't work */}
-          {!bottomBar.isPreview && (
-            <button onClick={() => downloadAudio(bottomBar.url)} title="Download audio"
-              style={{ background: 'transparent', border: 'none', color: t.labelColor, cursor: 'pointer', fontSize: '1.1rem', padding: '0.3rem', borderRadius: '4px', flexShrink: 0, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.color = t.textColor}
-              onMouseLeave={e => e.currentTarget.style.color = t.labelColor}>⬇</button>
-          )}
-
-          <button onClick={() => setBottomBar(null)}
-            style={{ background: 'transparent', border: 'none', color: t.labelColor, cursor: 'pointer', fontSize: '1rem', padding: '0.3rem', borderRadius: '4px', flexShrink: 0, transition: 'color 0.15s' }}
+          <button onClick={() => setBottomBar(null)} style={{ background: 'transparent', border: 'none', color: t.labelColor, cursor: 'pointer', fontSize: '1rem', padding: '0.3rem', borderRadius: '4px', flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => e.currentTarget.style.color = t.textColor}
             onMouseLeave={e => e.currentTarget.style.color = t.labelColor}>✕</button>
         </div>

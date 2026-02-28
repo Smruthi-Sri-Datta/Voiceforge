@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://voiceforge-4v8l.onrender.com'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
 const DEFAULT_VOICES = [
   { name: "Ana Florence",    color: "#f97316", type: "default" },

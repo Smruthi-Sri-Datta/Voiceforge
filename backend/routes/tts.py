@@ -135,22 +135,22 @@ def generate_audio(
     if not job_id:
         raise HTTPException(status_code=502, detail="RunPod did not return a job ID")
 
-    # Save pending record only for real generations, not previews
-    if not request.is_preview:
-        try:
-            generation = Generation(
-                id        = job_id,
-                user_id   = current_user.id,
-                text      = request.text[:200],
-                language  = request.language,
-                speaker   = request.speaker,
-                file_path = f"supabase://{job_id}.mp3",
-                audio_url = None,
-            )
-            db.add(generation)
-            db.commit()
-        except Exception as e:
-            print(f"[Generate] DB save error: {e}")
+    # Save pending record immediately with real user_id
+    # Webhook will update audio_url when job completes
+    try:
+        generation = Generation(
+            id        = job_id,
+            user_id   = current_user.id,        # ← real user, not "webhook"
+            text      = request.text[:200],
+            language  = request.language,
+            speaker   = request.speaker,
+            file_path = f"supabase://{job_id}.mp3",
+            audio_url = None,                   # ← pending, filled by webhook
+        )
+        db.add(generation)
+        db.commit()
+    except Exception as e:
+        print(f"[Generate] DB save error: {e}")
 
     return {"job_id": job_id, "status": "IN_QUEUE"}
 
