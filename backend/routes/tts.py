@@ -135,6 +135,23 @@ def generate_audio(
     if not job_id:
         raise HTTPException(status_code=502, detail="RunPod did not return a job ID")
 
+    # Save pending record immediately with real user_id
+    # Webhook will update audio_url when job completes
+    try:
+        generation = Generation(
+            id        = job_id,
+            user_id   = current_user.id,        # ← real user, not "webhook"
+            text      = request.text[:200],
+            language  = request.language,
+            speaker   = request.speaker,
+            file_path = f"supabase://{job_id}.mp3",
+            audio_url = None,                   # ← pending, filled by webhook
+        )
+        db.add(generation)
+        db.commit()
+    except Exception as e:
+        print(f"[Generate] DB save error: {e}")
+
     return {"job_id": job_id, "status": "IN_QUEUE"}
 
 
@@ -153,22 +170,15 @@ def runpod_webhook(payload: dict, db: Session = Depends(get_db)):
     if status == "COMPLETED" and job_id:
         audio_url = output.get("audio_url")
         try:
-            existing = db.query(Generation).filter(Generation.id == job_id).first()
-            if not existing:
-                generation = Generation(
-                    id        = job_id,
-                    user_id   = "webhook",
-                    text      = "Generated audio",
-                    language  = "en",
-                    speaker   = "Unknown",
-                    file_path = f"supabase://{job_id}.mp3",
-                    audio_url = audio_url,
-                )
-                db.add(generation)
+            generation = db.query(Generation).filter(Generation.id == job_id).first()
+            if generation:
+                generation.audio_url = audio_url   # ← update existing record
                 db.commit()
-                print(f"[Webhook] Saved audio_url={audio_url}")
+                print(f"[Webhook] Updated job_id={job_id} audio_url={audio_url}")
+            else:
+                print(f"[Webhook] WARNING: No pending record for job_id={job_id}")
         except Exception as e:
-            print(f"[Webhook] DB save error: {e}")
+            print(f"[Webhook] DB error: {e}")
 
     return {"status": "ok"}
 
