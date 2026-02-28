@@ -69,7 +69,6 @@ def get_languages():
 
 @router.get("/voices")
 def get_voices():
-    # Hardcoded — no RunPod needed for static list
     return {"voices": []}
 
 
@@ -82,13 +81,14 @@ def generate_audio(
     current_user = Depends(get_current_user)
 ):
     """
-    Step 1 of 3: Submit job to RunPod async.
-    RunPod returns job_id instantly (<2s).
-    RunPod will call /api/webhook/runpod when done.
+    Submit job to RunPod async with webhook.
+    Returns job_id instantly (~2s).
+    RunPod calls /api/webhook/runpod when done.
     Frontend polls /api/status/{job_id} every 3s.
     """
-    # Resolve custom voice URL if needed
-    voice_url = None
+    # If custom voice: download from Supabase and encode as base64
+    # handler.py expects voice_wav_base64, not a URL
+    voice_wav_b64 = None
     if request.voice_id:
         voice = db.query(Voice).filter(
             Voice.id == request.voice_id,
@@ -96,7 +96,13 @@ def generate_audio(
         ).first()
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
-        voice_url = voice.audio_url
+        if voice.audio_url:
+            try:
+                r = httpx.get(voice.audio_url, timeout=30)
+                r.raise_for_status()
+                voice_wav_b64 = base64.b64encode(r.content).decode("utf-8")
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"Failed to download voice file: {str(e)}")
 
     webhook_url = f"{BACKEND_URL}/api/webhook/runpod"
 
@@ -105,19 +111,18 @@ def generate_audio(
             f"{runpod_base_url()}/run",
             headers={
                 "Authorization": f"Bearer {RUNPOD_API_KEY}",
-                "Content-Type": "application/json"
+                "Content-Type":  "application/json"
             },
             json={
                 "input": {
-                    "action":    "generate",
-                    "text":      request.text,
-                    "speaker":   request.speaker,
-                    "language":  request.language,
-                    "speed":     request.speed,
-                    "voice_id":  request.voice_id,
-                    "voice_url": voice_url,
+                    "action":           "generate",
+                    "text":             request.text,
+                    "speaker":          request.speaker,
+                    "language":         request.language,
+                    "speed":            request.speed,
+                    "voice_wav_base64": voice_wav_b64,  # None for default voices
                 },
-                "webhook": webhook_url   # RunPod POSTs here when job completes
+                "webhook": webhook_url
             },
             timeout=30,
         )
@@ -125,7 +130,7 @@ def generate_audio(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"RunPod submit failed: {str(e)}")
 
-    data = response.json()
+    data   = response.json()
     job_id = data.get("id")
     if not job_id:
         raise HTTPException(status_code=502, detail="RunPod did not return a job ID")
@@ -136,9 +141,8 @@ def generate_audio(
 @router.post("/webhook/runpod")
 def runpod_webhook(payload: dict, db: Session = Depends(get_db)):
     """
-    Step 2 of 3: RunPod calls this endpoint when the job finishes.
-    We save the result to DB so /status can return it instantly.
-    No auth needed — RunPod calls this internally.
+    RunPod calls this when a generate job completes.
+    Saves result to DB so /status can return it instantly (no timeout).
     """
     status = payload.get("status")
     job_id = payload.get("id")
@@ -153,7 +157,7 @@ def runpod_webhook(payload: dict, db: Session = Depends(get_db)):
             if not existing:
                 generation = Generation(
                     id        = job_id,
-                    user_id   = "webhook",   # placeholder; updated when user views history
+                    user_id   = "webhook",
                     text      = "Generated audio",
                     language  = "en",
                     speaker   = "Unknown",
@@ -176,26 +180,23 @@ def get_job_status(
     current_user = Depends(get_current_user)
 ):
     """
-    Step 3 of 3: Frontend polls this every 3s.
-    First checks DB (instant) — populated by webhook.
+    Frontend polls this every 3s.
+    Checks DB first (instant) — populated by webhook.
     Falls back to RunPod API if webhook hasn't fired yet.
     """
     # Fast path: webhook already saved result to DB
     generation = db.query(Generation).filter(Generation.id == job_id).first()
     if generation and generation.audio_url:
-        return {
-            "status":    "COMPLETED",
-            "audio_url": generation.audio_url,
-        }
+        return {"status": "COMPLETED", "audio_url": generation.audio_url}
 
-    # Fallback: ask RunPod directly (webhook may not have fired yet)
+    # Fallback: ask RunPod directly
     try:
         response = httpx.get(
             f"{runpod_base_url()}/status/{job_id}",
             headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
             timeout=10,
         )
-        result = response.json()
+        result    = response.json()
         rp_status = result.get("status")
 
         if rp_status == "COMPLETED":
@@ -224,20 +225,22 @@ async def clone_voice(
 ):
     content   = await file.read()
     audio_b64 = base64.b64encode(content).decode("utf-8")
+    voice_id  = str(uuid.uuid4())
 
-    webhook_url = f"{BACKEND_URL}/api/webhook/runpod"
+    webhook_url = f"{BACKEND_URL}/api/webhook/runpod/voice"
 
     try:
         response = httpx.post(
             f"{runpod_base_url()}/run",
             headers={
                 "Authorization": f"Bearer {RUNPOD_API_KEY}",
-                "Content-Type": "application/json"
+                "Content-Type":  "application/json"
             },
             json={
                 "input": {
-                    "action":    "clone_voice",
-                    "audio_b64": audio_b64,
+                    "action":           "clone_voice",
+                    "voice_wav_base64": audio_b64,   # ← correct field name for handler.py
+                    "voice_id":         voice_id,
                 },
                 "webhook": webhook_url
             },
@@ -249,11 +252,48 @@ async def clone_voice(
 
     job_id = response.json().get("id")
 
-    # Count existing voices for auto-naming
+    # Save voice record to DB immediately (audio_url populated when webhook fires)
     voice_count = db.query(Voice).filter(Voice.user_id == current_user.id).count()
     voice_name  = f"V{voice_count + 1}"
 
-    return {"job_id": job_id, "name": voice_name, "status": "processing"}
+    voice = Voice(
+        id        = voice_id,
+        user_id   = current_user.id,
+        name      = voice_name,
+        file_path = f"supabase://{voice_id}.wav",
+        audio_url = None,
+    )
+    db.add(voice)
+    db.commit()
+
+    return {"job_id": job_id, "voice_id": voice_id, "name": voice_name, "status": "processing"}
+
+
+@router.post("/webhook/runpod/voice")
+def runpod_voice_webhook(payload: dict, db: Session = Depends(get_db)):
+    """
+    RunPod calls this when a clone_voice job completes.
+    Updates the voice record with the audio_url.
+    """
+    status = payload.get("status")
+    output = payload.get("output", {})
+
+    print(f"[VoiceWebhook] status={status}")
+
+    if status == "COMPLETED":
+        voice_id  = output.get("voice_id")
+        audio_url = output.get("audio_url")
+        if voice_id:
+            try:
+                voice = db.query(Voice).filter(Voice.id == voice_id).first()
+                if voice:
+                    voice.audio_url = audio_url
+                    db.commit()
+                    print(f"[VoiceWebhook] Updated voice {voice_id} audio_url={audio_url}")
+            except Exception as e:
+                print(f"[VoiceWebhook] DB update error: {e}")
+
+    return {"status": "ok"}
 
 
 # ── History & Voice Management ────────────────────────────────────────────────
@@ -274,7 +314,7 @@ def get_my_voices(
             "audio_url":  v.audio_url,
             "created_at": v.created_at.isoformat(),
         }
-        for v in voices if v.audio_url
+        for v in voices
     ]}
 
 
