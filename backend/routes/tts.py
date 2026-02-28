@@ -103,11 +103,24 @@ def get_voices():
 
 
 @router.post("/generate")
-def generate_audio(
-    request: GenerateRequest,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
+def generate_audio(request: GenerateRequest, db=Depends(get_db), current_user=Depends(get_current_user)):
+    base_url = RUNPOD_URL.replace("/runsync", "")
+    response = httpx.post(
+        f"{base_url}/run",
+        headers={"Authorization": f"Bearer {RUNPOD_API_KEY}", "Content-Type": "application/json"},
+        json={"input": {
+            "action": "generate",
+            "text": request.text,
+            "speaker": request.speaker,
+            "language": request.language,
+            "speed": request.speed,
+            "voice_id": request.voice_id,
+        }},
+        timeout=30,
+    )
+    job_id = response.json().get("id")
+    return {"job_id": job_id, "status": "processing"}
+
     # Resolve voice_id to Supabase URL if custom voice
     voice_url = None
     if request.voice_id:
@@ -189,6 +202,24 @@ async def clone_voice(
     db.commit()
 
     return {"voice_id": voice_id, "name": voice_name}
+
+@router.get("/status/{job_id}")
+def get_job_status(job_id: str, current_user=Depends(get_current_user)):
+    base_url = RUNPOD_URL.replace("/runsync", "")
+    response = httpx.get(
+        f"{base_url}/status/{job_id}",
+        headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
+        timeout=10,
+    )
+    result = response.json()
+    status = result.get("status")
+    if status == "COMPLETED":
+        output = result.get("output", {})
+        return {"status": "COMPLETED", "audio_url": output.get("audio_url"), "warning": output.get("warning")}
+    elif status == "FAILED":
+        return {"status": "FAILED", "error": result.get("error")}
+    else:
+        return {"status": status}
 
 
 @router.get("/my-voices")

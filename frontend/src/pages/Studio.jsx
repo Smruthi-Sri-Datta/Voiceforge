@@ -168,7 +168,8 @@ function Studio() {
     setLoading(true)
     setBottomBar(null)
     try {
-      const response = await authFetch(`${BACKEND}/api/generate`, {
+      // Step 1: Submit job — returns job_id immediately
+      const submitRes = await authFetch(`${BACKEND}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -179,22 +180,49 @@ function Studio() {
           voice_id: voice.type === 'custom' ? voice.voice_id : null,
         })
       })
-      if (!response.ok) {
-        const errData = await response.json()
+      if (!submitRes.ok) {
+        const errData = await submitRes.json()
         setGenerationError(errData.detail || "Generation failed. Please try again.")
         setLoading(false)
         return
       }
-      const data = await response.json()
-      const url  = `${BACKEND}/api/audio/${data.file}`
-      setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
-      if (data.warning) setGenerationWarning(data.warning)
-      else setGenerationWarning(null)
-      addHistoryEntry({
-        text,
-        voice: { name: voice.name, color: voice.color, type: voice.type },
-        language, speed, audioUrl: url,
-      })
+      const { job_id } = await submitRes.json()
+
+      // Step 2: Poll /api/status/{job_id} every 3 seconds
+      let attempts = 0
+      const maxAttempts = 100  // 5 minutes max
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 3000))  // wait 3s
+        attempts++
+
+        const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
+        if (!statusRes.ok) continue
+
+        const result = await statusRes.json()
+
+        if (result.status === "COMPLETED") {
+          const url = result.audio_url
+          setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
+          if (result.warning) setGenerationWarning(result.warning)
+          else setGenerationWarning(null)
+          addHistoryEntry({
+            text,
+            voice: { name: voice.name, color: voice.color, type: voice.type },
+            language, speed, audioUrl: url,
+          })
+          setLoading(false)
+          return
+        }
+
+        if (result.status === "FAILED") {
+          setGenerationError(result.error || "Generation failed on RunPod.")
+          setLoading(false)
+          return
+        }
+        // IN_QUEUE or IN_PROGRESS — keep polling
+      }
+
+      setGenerationError("Generation timed out. Please try again.")
     } catch {
       setGenerationError("Could not reach the backend. Make sure the server is running.")
     }
@@ -227,7 +255,7 @@ function Studio() {
         body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
       })
       const data = await response.json()
-      const url  = `${BACKEND}/api/audio/${data.file}`
+      const url  = data.audio_url
       setPreviewCache(prev => ({ ...prev, [v.name]: url }))
       setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
     } catch { console.error("Preview failed") }
