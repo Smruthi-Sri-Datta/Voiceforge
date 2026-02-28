@@ -29,22 +29,37 @@ def delete_from_supabase(bucket: str, filename: str):
 
 
 def call_runpod(payload: dict, timeout: int = 300) -> dict:
-    """Call RunPod Serverless and return output."""
+    """Submit to RunPod async, poll until done."""
+    import time
+    base_url = RUNPOD_URL.replace("/runsync", "")
+
+    # Submit job
     response = httpx.post(
-        RUNPOD_URL,
-        headers={
-            "Authorization": f"Bearer {RUNPOD_API_KEY}",
-            "Content-Type": "application/json",
-        },
+        f"{base_url}/run",
+        headers={"Authorization": f"Bearer {RUNPOD_API_KEY}", "Content-Type": "application/json"},
         json={"input": payload},
-        timeout=timeout,
+        timeout=30,
     )
     if response.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"RunPod error: {response.text}")
-    result = response.json()
-    if result.get("status") == "FAILED":
-        raise HTTPException(status_code=500, detail=result.get("error", "RunPod job failed"))
-    return result.get("output", {})
+        raise HTTPException(status_code=502, detail=f"RunPod submit error: {response.text}")
+
+    job_id = response.json().get("id")
+
+    # Poll for result
+    for _ in range(60):
+        time.sleep(5)
+        status_resp = httpx.get(
+            f"{base_url}/status/{job_id}",
+            headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
+            timeout=10,
+        )
+        result = status_resp.json()
+        if result.get("status") == "COMPLETED":
+            return result.get("output", {})
+        if result.get("status") == "FAILED":
+            raise HTTPException(status_code=500, detail=result.get("error", "RunPod job failed"))
+
+    raise HTTPException(status_code=504, detail="RunPod job timed out")
 
 
 # ── Request Models ────────────────────────────────────────────────────────────
@@ -267,4 +282,4 @@ def clear_history(
         delete_from_supabase("audio", f"{g.id}.mp3")
         db.delete(g)
     db.commit()
-    return {"message": "History cleared"}
+    return {"message": "History cleared"}# Note: replace call_runpod with async version
