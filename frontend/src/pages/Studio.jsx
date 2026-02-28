@@ -241,26 +241,41 @@ function Studio() {
     await _doGenerate()
   }
 
-  async function handlePreview(v) {
-    if (previewCache[v.name]) {
-      setBottomBar({ url: previewCache[v.name], label: v.name, color: v.color, isPreview: true })
-      return
-    }
-    setPreviewLoading(v.name)
-    try {
-      const previewText = VOICE_META[v.name]?.previewText || `Hi, I'm ${v.name}. How can I help you today?`
-      const response = await authFetch(`${BACKEND}/api/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
-      })
-      const data = await response.json()
-      const url  = data.audio_url
-      setPreviewCache(prev => ({ ...prev, [v.name]: url }))
-      setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
-    } catch { console.error("Preview failed") }
-    setPreviewLoading(null)
+ async function handlePreview(v) {
+  if (previewCache[v.name]) {
+    setBottomBar({ url: previewCache[v.name], label: v.name, color: v.color, isPreview: true })
+    return
   }
+  setPreviewLoading(v.name)
+  try {
+    const previewText = VOICE_META[v.name]?.previewText || `Hi, I'm ${v.name}. How can I help you today?`
+    const response = await authFetch(`${BACKEND}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
+    })
+    const data = await response.json()
+    const job_id = data.job_id
+    if (!job_id) throw new Error("No job_id returned")
+
+    // Poll for result
+    let attempts = 0
+    while (attempts < 100) {
+      await new Promise(r => setTimeout(r, 3000))
+      attempts++
+      const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
+      const result = await statusRes.json()
+      if (result.status === "COMPLETED") {
+        const url = result.audio_url
+        setPreviewCache(prev => ({ ...prev, [v.name]: url }))
+        setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
+        break
+      }
+      if (result.status === "FAILED") break
+    }
+  } catch { console.error("Preview failed") }
+  setPreviewLoading(null)
+ }
 
   function selectVoice(v) {
     setVoice(v)
