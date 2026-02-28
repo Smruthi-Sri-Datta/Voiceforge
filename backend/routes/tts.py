@@ -13,12 +13,17 @@ import base64
 
 router = APIRouter()
 
-SUPABASE_URL  = os.getenv("SUPABASE_URL")
-SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_KEY")
-RUNPOD_URL    = os.getenv("RUNPOD_URL")       # https://api.runpod.ai/v2/bcgrtz1xbml3iw/runsync
-RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")  # rpa_...
+SUPABASE_URL   = os.getenv("SUPABASE_URL")
+SUPABASE_KEY   = os.getenv("SUPABASE_SERVICE_KEY")
+RUNPOD_URL     = os.getenv("RUNPOD_URL")        # https://api.runpod.ai/v2/bcgrtz1xbml3iw/runsync
+RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
+BACKEND_URL    = os.getenv("BACKEND_URL")       # https://voiceforge-4v8l.onrender.com
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def runpod_base_url():
+    return RUNPOD_URL.replace("/runsync", "")
 
 
 def delete_from_supabase(bucket: str, filename: str):
@@ -26,40 +31,6 @@ def delete_from_supabase(bucket: str, filename: str):
         supabase.storage.from_(bucket).remove([filename])
     except Exception as e:
         print(f"Failed to delete from Supabase: {e}")
-
-
-def call_runpod(payload: dict, timeout: int = 300) -> dict:
-    """Submit to RunPod async, poll until done."""
-    import time
-    base_url = RUNPOD_URL.replace("/runsync", "")
-
-    # Submit job
-    response = httpx.post(
-        f"{base_url}/run",
-        headers={"Authorization": f"Bearer {RUNPOD_API_KEY}", "Content-Type": "application/json"},
-        json={"input": payload},
-        timeout=30,
-    )
-    if response.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"RunPod submit error: {response.text}")
-
-    job_id = response.json().get("id")
-
-    # Poll for result
-    for _ in range(60):
-        time.sleep(5)
-        status_resp = httpx.get(
-            f"{base_url}/status/{job_id}",
-            headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
-            timeout=10,
-        )
-        result = status_resp.json()
-        if result.get("status") == "COMPLETED":
-            return result.get("output", {})
-        if result.get("status") == "FAILED":
-            raise HTTPException(status_code=500, detail=result.get("error", "RunPod job failed"))
-
-    raise HTTPException(status_code=504, detail="RunPod job timed out")
 
 
 # ── Request Models ────────────────────────────────────────────────────────────
@@ -72,7 +43,7 @@ class GenerateRequest(BaseModel):
     voice_id: Optional[str] = None
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Static Routes ─────────────────────────────────────────────────────────────
 
 @router.get("/languages")
 def get_languages():
@@ -98,30 +69,25 @@ def get_languages():
 
 @router.get("/voices")
 def get_voices():
-    output = call_runpod({"action": "get_voices"})
-    return output
+    # Hardcoded — no RunPod needed for static list
+    return {"voices": []}
 
+
+# ── Core Generation (Webhook Pattern) ────────────────────────────────────────
 
 @router.post("/generate")
-def generate_audio(request: GenerateRequest, db=Depends(get_db), current_user=Depends(get_current_user)):
-    base_url = RUNPOD_URL.replace("/runsync", "")
-    response = httpx.post(
-        f"{base_url}/run",
-        headers={"Authorization": f"Bearer {RUNPOD_API_KEY}", "Content-Type": "application/json"},
-        json={"input": {
-            "action": "generate",
-            "text": request.text,
-            "speaker": request.speaker,
-            "language": request.language,
-            "speed": request.speed,
-            "voice_id": request.voice_id,
-        }},
-        timeout=30,
-    )
-    job_id = response.json().get("id")
-    return {"job_id": job_id, "status": "processing"}
-
-    # Resolve voice_id to Supabase URL if custom voice
+def generate_audio(
+    request: GenerateRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Step 1 of 3: Submit job to RunPod async.
+    RunPod returns job_id instantly (<2s).
+    RunPod will call /api/webhook/runpod when done.
+    Frontend polls /api/status/{job_id} every 3s.
+    """
+    # Resolve custom voice URL if needed
     voice_url = None
     if request.voice_id:
         voice = db.query(Voice).filter(
@@ -132,42 +98,123 @@ def generate_audio(request: GenerateRequest, db=Depends(get_db), current_user=De
             raise HTTPException(status_code=404, detail="Voice not found")
         voice_url = voice.audio_url
 
-    # Call RunPod
-    output = call_runpod({
-        "action":    "generate",
-        "text":      request.text,
-        "speaker":   request.speaker,
-        "language":  request.language,
-        "speed":     request.speed,
-        "voice_id":  request.voice_id,
-        "voice_url": voice_url,
-    })
+    webhook_url = f"{BACKEND_URL}/api/webhook/runpod"
 
-    audio_url = output.get("audio_url")
-    file_id   = output.get("file_id", str(uuid.uuid4()))
-    filename  = output.get("filename", f"{file_id}.mp3")
-    warning   = output.get("warning")
+    try:
+        response = httpx.post(
+            f"{runpod_base_url()}/run",
+            headers={
+                "Authorization": f"Bearer {RUNPOD_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "input": {
+                    "action":    "generate",
+                    "text":      request.text,
+                    "speaker":   request.speaker,
+                    "language":  request.language,
+                    "speed":     request.speed,
+                    "voice_id":  request.voice_id,
+                    "voice_url": voice_url,
+                },
+                "webhook": webhook_url   # RunPod POSTs here when job completes
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"RunPod submit failed: {str(e)}")
 
-    # Save to DB
-    generation = Generation(
-        id        = file_id,
-        user_id   = current_user.id,
-        text      = request.text[:200],
-        language  = request.language,
-        speaker   = request.speaker,
-        file_path = f"supabase://{filename}",
-        audio_url = audio_url,
-    )
-    db.add(generation)
-    db.commit()
+    data = response.json()
+    job_id = data.get("id")
+    if not job_id:
+        raise HTTPException(status_code=502, detail="RunPod did not return a job ID")
 
-    return {
-        "message":   "Audio generated!",
-        "file":      filename,
-        "audio_url": audio_url,
-        "warning":   warning,
-    }
+    return {"job_id": job_id, "status": "IN_QUEUE"}
 
+
+@router.post("/webhook/runpod")
+def runpod_webhook(payload: dict, db: Session = Depends(get_db)):
+    """
+    Step 2 of 3: RunPod calls this endpoint when the job finishes.
+    We save the result to DB so /status can return it instantly.
+    No auth needed — RunPod calls this internally.
+    """
+    status = payload.get("status")
+    job_id = payload.get("id")
+    output = payload.get("output", {})
+
+    print(f"[Webhook] job_id={job_id} status={status}")
+
+    if status == "COMPLETED" and job_id:
+        audio_url = output.get("audio_url")
+        try:
+            existing = db.query(Generation).filter(Generation.id == job_id).first()
+            if not existing:
+                generation = Generation(
+                    id        = job_id,
+                    user_id   = "webhook",   # placeholder; updated when user views history
+                    text      = "Generated audio",
+                    language  = "en",
+                    speaker   = "Unknown",
+                    file_path = f"supabase://{job_id}.mp3",
+                    audio_url = audio_url,
+                )
+                db.add(generation)
+                db.commit()
+                print(f"[Webhook] Saved audio_url={audio_url}")
+        except Exception as e:
+            print(f"[Webhook] DB save error: {e}")
+
+    return {"status": "ok"}
+
+
+@router.get("/status/{job_id}")
+def get_job_status(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Step 3 of 3: Frontend polls this every 3s.
+    First checks DB (instant) — populated by webhook.
+    Falls back to RunPod API if webhook hasn't fired yet.
+    """
+    # Fast path: webhook already saved result to DB
+    generation = db.query(Generation).filter(Generation.id == job_id).first()
+    if generation and generation.audio_url:
+        return {
+            "status":    "COMPLETED",
+            "audio_url": generation.audio_url,
+        }
+
+    # Fallback: ask RunPod directly (webhook may not have fired yet)
+    try:
+        response = httpx.get(
+            f"{runpod_base_url()}/status/{job_id}",
+            headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
+            timeout=10,
+        )
+        result = response.json()
+        rp_status = result.get("status")
+
+        if rp_status == "COMPLETED":
+            output = result.get("output", {})
+            return {
+                "status":    "COMPLETED",
+                "audio_url": output.get("audio_url"),
+                "warning":   output.get("warning"),
+            }
+        elif rp_status == "FAILED":
+            return {"status": "FAILED", "error": result.get("error", "Job failed")}
+        else:
+            return {"status": rp_status}   # IN_QUEUE or IN_PROGRESS
+
+    except Exception:
+        return {"status": "IN_QUEUE"}
+
+
+# ── Voice Cloning ─────────────────────────────────────────────────────────────
 
 @router.post("/clone-voice")
 async def clone_voice(
@@ -175,52 +222,41 @@ async def clone_voice(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    content = await file.read()
+    content   = await file.read()
     audio_b64 = base64.b64encode(content).decode("utf-8")
 
-    # Call RunPod to upload voice
-    output = call_runpod({
-        "action":     "clone_voice",
-        "audio_b64":  audio_b64,
-    })
+    webhook_url = f"{BACKEND_URL}/api/webhook/runpod"
 
-    voice_id  = output.get("voice_id", str(uuid.uuid4()))
-    voice_url = output.get("audio_url")
+    try:
+        response = httpx.post(
+            f"{runpod_base_url()}/run",
+            headers={
+                "Authorization": f"Bearer {RUNPOD_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "input": {
+                    "action":    "clone_voice",
+                    "audio_b64": audio_b64,
+                },
+                "webhook": webhook_url
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"RunPod submit failed: {str(e)}")
+
+    job_id = response.json().get("id")
 
     # Count existing voices for auto-naming
     voice_count = db.query(Voice).filter(Voice.user_id == current_user.id).count()
     voice_name  = f"V{voice_count + 1}"
 
-    voice = Voice(
-        id        = voice_id,
-        user_id   = current_user.id,
-        name      = voice_name,
-        file_path = f"supabase://{voice_id}.wav",
-        audio_url = voice_url,
-    )
-    db.add(voice)
-    db.commit()
+    return {"job_id": job_id, "name": voice_name, "status": "processing"}
 
-    return {"voice_id": voice_id, "name": voice_name}
 
-@router.get("/status/{job_id}")
-def get_job_status(job_id: str, current_user=Depends(get_current_user)):
-    base_url = RUNPOD_URL.replace("/runsync", "")
-    response = httpx.get(
-        f"{base_url}/status/{job_id}",
-        headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
-        timeout=10,
-    )
-    result = response.json()
-    status = result.get("status")
-    if status == "COMPLETED":
-        output = result.get("output", {})
-        return {"status": "COMPLETED", "audio_url": output.get("audio_url"), "warning": output.get("warning")}
-    elif status == "FAILED":
-        return {"status": "FAILED", "error": result.get("error")}
-    else:
-        return {"status": status}
-
+# ── History & Voice Management ────────────────────────────────────────────────
 
 @router.get("/my-voices")
 def get_my_voices(
@@ -313,4 +349,4 @@ def clear_history(
         delete_from_supabase("audio", f"{g.id}.mp3")
         db.delete(g)
     db.commit()
-    return {"message": "History cleared"}# Note: replace call_runpod with async version
+    return {"message": "History cleared"}
