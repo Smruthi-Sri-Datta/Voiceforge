@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://voiceforge-4v8l.onrender.com'
 const TOKEN_KEY    = 'voiceforge_auth_token'
 const CREDITS_KEY  = 'voiceforge_guest_credits'
 

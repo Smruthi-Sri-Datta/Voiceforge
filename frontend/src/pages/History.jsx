@@ -3,7 +3,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useVoices } from '../context/VoicesContext'
 import { useHistory } from '../context/HistoryContext'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://voiceforge-4v8l.onrender.com'
 
 function getAudioUrl(v) {
   return v.audio_url || v.previewUrl || `${BACKEND}/api/audio/${v.voice_id}.wav`
