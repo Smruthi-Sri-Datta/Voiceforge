@@ -68,6 +68,7 @@ function Studio() {
   const [languages, setLanguages]                 = useState([])
   const [showLangMenu, setShowLangMenu]           = useState(false)
   const [speed, setSpeed]                         = useState(1.0)
+  const [jobStatus, setJobStatus]                 = useState(null)  // IN_QUEUE | IN_PROGRESS | COMPLETED
   const [loading, setLoading]                     = useState(false)
   const [hoveredChip, setHoveredChip]             = useState(null)
   const [generationError, setGenerationError]     = useState(null)
@@ -166,6 +167,7 @@ function Studio() {
     setGenerationError(null)
     setGenerationWarning(null)
     setLoading(true)
+    setJobStatus(null)
     setBottomBar(null)
     try {
       // Step 1: Submit job — returns job_id immediately
@@ -192,13 +194,14 @@ function Studio() {
       let attempts = 0
       const maxAttempts = 100  // 5 minutes max
       while (attempts < maxAttempts) {
-        await new Promise(r => setTimeout(r, 3000))  // wait 3s
+        await new Promise(r => setTimeout(r, 3000))
         attempts++
 
         const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
         if (!statusRes.ok) continue
 
         const result = await statusRes.json()
+        setJobStatus(result.status)
 
         if (result.status === "COMPLETED") {
           const url = result.audio_url
@@ -241,41 +244,41 @@ function Studio() {
     await _doGenerate()
   }
 
- async function handlePreview(v) {
-  if (previewCache[v.name]) {
-    setBottomBar({ url: previewCache[v.name], label: v.name, color: v.color, isPreview: true })
-    return
-  }
-  setPreviewLoading(v.name)
-  try {
-    const previewText = VOICE_META[v.name]?.previewText || `Hi, I'm ${v.name}. How can I help you today?`
-    const response = await authFetch(`${BACKEND}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
-    })
-    const data = await response.json()
-    const job_id = data.job_id
-    if (!job_id) throw new Error("No job_id returned")
-
-    // Poll for result
-    let attempts = 0
-    while (attempts < 100) {
-      await new Promise(r => setTimeout(r, 3000))
-      attempts++
-      const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
-      const result = await statusRes.json()
-      if (result.status === "COMPLETED") {
-        const url = result.audio_url
-        setPreviewCache(prev => ({ ...prev, [v.name]: url }))
-        setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
-        break
-      }
-      if (result.status === "FAILED") break
+  async function handlePreview(v) {
+    if (previewCache[v.name]) {
+      setBottomBar({ url: previewCache[v.name], label: v.name, color: v.color, isPreview: true })
+      return
     }
-  } catch { console.error("Preview failed") }
-  setPreviewLoading(null)
- }
+    setPreviewLoading(v.name)
+    try {
+      const previewText = VOICE_META[v.name]?.previewText || `Hi, I'm ${v.name}. How can I help you today?`
+      const response = await authFetch(`${BACKEND}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
+      })
+      const data = await response.json()
+      const job_id = data.job_id
+      if (!job_id) throw new Error("No job_id returned")
+
+      // Poll for result
+      let attempts = 0
+      while (attempts < 100) {
+        await new Promise(r => setTimeout(r, 3000))
+        attempts++
+        const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
+        const result = await statusRes.json()
+        if (result.status === "COMPLETED") {
+          const url = result.audio_url
+          setPreviewCache(prev => ({ ...prev, [v.name]: url }))
+          setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
+          break
+        }
+        if (result.status === "FAILED") break
+      }
+    } catch { console.error("Preview failed") }
+    setPreviewLoading(null)
+  }
 
   function selectVoice(v) {
     setVoice(v)
@@ -387,15 +390,13 @@ function Studio() {
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <button onClick={() => { if (bottomBar?.url) window.open(bottomBar.url) }}
-                disabled={!bottomBar?.url || bottomBar?.isPreview}
-                title="Download audio"
-                style={{ width: '38px', height: '38px', borderRadius: '8px', border: `1px solid ${t.rowBorder}`, background: 'transparent', color: bottomBar?.url && !bottomBar?.isPreview ? t.textColor : t.labelColor, cursor: bottomBar?.url && !bottomBar?.isPreview ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem', transition: 'all 0.15s' }}>
-                ⬇
-              </button>
               <button onClick={generateAudio} disabled={loading || !text.trim() || text.length > charLimit}
                 style={{ padding: '0.65rem 1.8rem', borderRadius: '8px', border: 'none', fontSize: '0.88rem', fontWeight: '700', cursor: loading || !text.trim() || text.length > charLimit ? 'not-allowed' : 'pointer', background: loading || !text.trim() || text.length > charLimit ? (isDark ? '#1e1e2e' : '#e5e5e8') : 'linear-gradient(135deg, #7c3aed, #a855f7)', color: loading || !text.trim() || text.length > charLimit ? (isDark ? '#444' : '#aaa') : 'white', boxShadow: loading || !text.trim() ? 'none' : '0 4px 16px rgba(124,58,237,0.25)', transition: 'all 0.2s ease', whiteSpace: 'nowrap' }}>
-                {loading ? "⏳ Generating..." : "⚡ Generate Audio"}
+                {loading
+                  ? jobStatus === "IN_QUEUE"    ? "⏳ In queue..."
+                  : jobStatus === "IN_PROGRESS" ? "🔄 Generating..."
+                  : "⏳ Starting..."
+                  : "⚡ Generate Audio"}
               </button>
             </div>
           </div>
@@ -439,8 +440,6 @@ function Studio() {
                 </div>
                 {showLangMenu && (
                   <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 100, background: t.menuBg, border: `1px solid ${t.menuBorder}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.14)', maxHeight: '300px', overflowY: 'auto' }}>
-
-                    {/* Global languages */}
                     <div style={{ padding: '0.4rem 1rem 0.2rem', fontSize: '0.68rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Global Languages</div>
                     {globalLangs.map(l => (
                       <div key={l.code} onClick={() => { setLanguage(l.code); setShowLangMenu(false) }}
@@ -451,8 +450,6 @@ function Studio() {
                         {language === l.code && <span style={{ color: '#a78bfa', fontSize: '0.8rem' }}>✓</span>}
                       </div>
                     ))}
-
-                    {/* Indian languages */}
                     <div style={{ padding: '0.4rem 1rem 0.2rem', fontSize: '0.68rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.5px', textTransform: 'uppercase', borderTop: `1px solid ${t.divider}`, marginTop: '0.3rem' }}>
                       🇮🇳 Indian Languages
                     </div>
@@ -572,10 +569,12 @@ function Studio() {
                           <div style={{ fontSize: '0.74rem', color: t.labelColor, marginTop: '0.15rem' }}>Custom cloned voice</div>
                         </div>
                         <span style={{ background: '#7c3aed18', color: '#a78bfa', padding: '0.15rem 0.5rem', borderRadius: '20px', fontSize: '0.68rem', border: '1px solid #7c3aed33', flexShrink: 0 }}>Custom</span>
-                        <button onClick={e => { e.stopPropagation(); setBottomBar({ url: getAudioUrl(v), label: v.name, color: v.color, isPreview: true }) }} title="Preview"
-                          style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'transparent', border: 'none', color: t.labelMid, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', flexShrink: 0 }}
+                        <button onClick={e => { e.stopPropagation(); handlePreview(v) }} disabled={previewLoading === v.name} title="Preview"
+                          style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'transparent', border: 'none', color: previewLoading === v.name ? t.labelColor : t.labelMid, cursor: previewLoading === v.name ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', flexShrink: 0 }}
                           onMouseEnter={e => { e.currentTarget.style.background = isDark ? '#2a2a4a' : '#ebebeb'; e.currentTarget.style.color = t.textColor }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = t.labelMid }}>▶</button>
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = t.labelMid }}>
+                          {previewLoading === v.name ? '⏳' : '▶'}
+                        </button>
                       </div>
                     ))
                 )}
@@ -585,9 +584,10 @@ function Studio() {
         </div>
       </div>
 
-      {/* Bottom audio bar */}
+      {/* ── Bottom audio bar ── */}
       {bottomBar && (
         <div style={{ borderTop: `1px solid ${t.bottomBarBorder}`, background: t.bottomBarBg, padding: '0.7rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0, boxShadow: isDark ? '0 -4px 20px rgba(0,0,0,0.3)' : '0 -4px 20px rgba(0,0,0,0.06)' }}>
+          {/* Voice label */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0, minWidth: '170px' }}>
             <div style={{ width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0, background: `radial-gradient(circle at 35% 35%, ${bottomBar.color}cc, ${bottomBar.color}44)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '700', fontSize: '0.82rem' }}>{bottomBar.label[0]}</div>
             <div>
@@ -595,8 +595,24 @@ function Studio() {
               <div style={{ fontSize: '0.7rem', color: t.labelColor }}>{bottomBar.isPreview ? '🎧 Voice preview' : '✨ Generated audio'}</div>
             </div>
           </div>
+
+          {/* Audio player */}
           <audio controls autoPlay src={bottomBar.url} style={{ flex: 1, height: '34px' }} />
-          <button onClick={() => setBottomBar(null)} style={{ background: 'transparent', border: 'none', color: t.labelColor, cursor: 'pointer', fontSize: '1rem', padding: '0.3rem', borderRadius: '4px', flexShrink: 0, transition: 'color 0.15s' }}
+
+          {/* Download button — only for generated audio, not previews */}
+          {!bottomBar.isPreview && (
+            <a href={bottomBar.url} download="voiceforge-audio.mp3"
+              title="Download audio"
+              style={{ background: 'transparent', border: 'none', color: t.labelColor, cursor: 'pointer', fontSize: '1.1rem', padding: '0.3rem', borderRadius: '4px', flexShrink: 0, textDecoration: 'none', display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.color = t.textColor}
+              onMouseLeave={e => e.currentTarget.style.color = t.labelColor}>
+              ⬇
+            </a>
+          )}
+
+          {/* Close button */}
+          <button onClick={() => setBottomBar(null)}
+            style={{ background: 'transparent', border: 'none', color: t.labelColor, cursor: 'pointer', fontSize: '1rem', padding: '0.3rem', borderRadius: '4px', flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => e.currentTarget.style.color = t.textColor}
             onMouseLeave={e => e.currentTarget.style.color = t.labelColor}>✕</button>
         </div>
