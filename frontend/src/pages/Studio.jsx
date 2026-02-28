@@ -208,8 +208,14 @@ function Studio() {
         }
       }
       setGenerationError("Generation timed out. Please try again.")
-    } catch {
-      setGenerationError("Could not reach the backend. Make sure the server is running.")
+    } catch (err) {
+      console.error("[Generate] caught error:", err)
+      const msg = err?.message || String(err)
+      if (msg.includes("401") || msg.includes("token") || msg.includes("auth")) {
+        setGenerationError("Session expired. Please sign out and sign back in.")
+      } else {
+        setGenerationError(`Error: ${msg}`)
+      }
     }
     setLoading(false)
   }
@@ -380,14 +386,16 @@ function Studio() {
                 </div>
               )}
             </div>
-            <button onClick={generateAudio} disabled={loading || !text.trim() || text.length > charLimit}
-              style={{ padding: '0.65rem 1.8rem', borderRadius: '8px', border: 'none', fontSize: '0.88rem', fontWeight: '700', cursor: loading || !text.trim() || text.length > charLimit ? 'not-allowed' : 'pointer', background: loading || !text.trim() || text.length > charLimit ? (isDark ? '#1e1e2e' : '#e5e5e8') : 'linear-gradient(135deg, #7c3aed, #a855f7)', color: loading || !text.trim() || text.length > charLimit ? (isDark ? '#444' : '#aaa') : 'white', boxShadow: loading || !text.trim() ? 'none' : '0 4px 16px rgba(124,58,237,0.25)', transition: 'all 0.2s ease', whiteSpace: 'nowrap' }}>
-              {loading
-                ? jobStatus === "IN_QUEUE"    ? "⏳ In queue..."
-                : jobStatus === "IN_PROGRESS" ? "🔄 Generating..."
-                : "⏳ Starting..."
-                : "⚡ Generate Audio"}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <button onClick={generateAudio} disabled={loading || !text.trim() || text.length > charLimit}
+                style={{ padding: '0.65rem 1.8rem', borderRadius: '8px', border: 'none', fontSize: '0.88rem', fontWeight: '700', cursor: loading || !text.trim() || text.length > charLimit ? 'not-allowed' : 'pointer', background: loading || !text.trim() || text.length > charLimit ? (isDark ? '#1e1e2e' : '#e5e5e8') : 'linear-gradient(135deg, #7c3aed, #a855f7)', color: loading || !text.trim() || text.length > charLimit ? (isDark ? '#444' : '#aaa') : 'white', boxShadow: loading || !text.trim() ? 'none' : '0 4px 16px rgba(124,58,237,0.25)', transition: 'all 0.2s ease', whiteSpace: 'nowrap' }}>
+                {loading
+                  ? jobStatus === "IN_QUEUE"    ? "⏳ In queue..."
+                  : jobStatus === "IN_PROGRESS" ? "🔄 Generating..."
+                  : "⏳ Starting..."
+                  : "⚡ Generate Audio"}
+              </button>
+            </div>
           </div>
         </div>
 
