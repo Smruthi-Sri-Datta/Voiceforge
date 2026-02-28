@@ -66,7 +66,7 @@ function getAudioUrl(v) {
 function Voices() {
   const { isDark } = useTheme()
   const { clonedVoices, addClonedVoice, removeClonedVoice, DEFAULT_VOICES } = useVoices()
-  const { useGuestCredit, authFetch } = useAuth()   // ← credit gate
+  const { useGuestCredit, authFetch } = useAuth()
 
   const [uploading, setUploading]             = useState(false)
   const [dragOver, setDragOver]               = useState(false)
@@ -124,8 +124,7 @@ function Voices() {
       return
     }
 
-    // ── FREEMIUM GATE: consume 1 clone credit if guest ──
-    if (!useGuestCredit('clone')) return   // modal opened automatically
+    if (!useGuestCredit('clone')) return
 
     setPendingFile(null); setUploading(true)
     try {
@@ -194,16 +193,37 @@ function Voices() {
     if (mediaRecorderRef.current && recording) { mediaRecorderRef.current.stop(); setRecording(false) }
   }
 
+  // ── Fixed: uses polling pattern + is_preview to skip history ─────────────
   async function previewDefaultVoice(vName) {
     if (previewUrls[vName]) { setPreviewingVoice(vName); return }
     setPreviewingVoice(vName)
     try {
       const response = await authFetch(`${BACKEND}/api/generate`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: `Hi, I'm ${vName}. How can I help you today?`, speaker: vName, language: "en", speed: 1.0 })
+        body: JSON.stringify({
+          text:       `Hi, I'm ${vName}. How can I help you today?`,
+          speaker:    vName,
+          language:   "en",
+          speed:      1.0,
+          is_preview: true,   // ← skip DB save, won't appear in history
+        })
       })
       const data = await response.json()
-      setPreviewUrls(prev => ({ ...prev, [vName]: `${BACKEND}/api/audio/${data.file}` }))
+      const job_id = data.job_id
+      if (!job_id) throw new Error("No job_id")
+
+      let attempts = 0
+      while (attempts < 100) {
+        await new Promise(r => setTimeout(r, 3000))
+        attempts++
+        const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
+        const result = await statusRes.json()
+        if (result.status === "COMPLETED") {
+          setPreviewUrls(prev => ({ ...prev, [vName]: result.audio_url }))
+          break
+        }
+        if (result.status === "FAILED") throw new Error("Failed")
+      }
     } catch {
       setPreviewingVoice(null)
       setError("Preview failed. Make sure the backend is running.")
