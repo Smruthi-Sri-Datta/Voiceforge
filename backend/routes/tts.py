@@ -61,8 +61,24 @@ class GenerateRequest(BaseModel):
 
 @router.get("/languages")
 def get_languages():
-    output = call_runpod({"action": "get_languages"})
-    return output
+    return {"languages": [
+        {"code": "en",    "name": "🇬🇧 English",    "engine": "xtts"},
+        {"code": "fr",    "name": "🇫🇷 French",     "engine": "xtts"},
+        {"code": "de",    "name": "🇩🇪 German",     "engine": "xtts"},
+        {"code": "es",    "name": "🇪🇸 Spanish",    "engine": "xtts"},
+        {"code": "ja",    "name": "🇯🇵 Japanese",   "engine": "xtts"},
+        {"code": "zh-cn", "name": "🇨🇳 Chinese",    "engine": "xtts"},
+        {"code": "hi",    "name": "🇮🇳 Hindi",      "engine": "sarvam"},
+        {"code": "bn",    "name": "🇮🇳 Bengali",    "engine": "sarvam"},
+        {"code": "ta",    "name": "🇮🇳 Tamil",      "engine": "sarvam"},
+        {"code": "te",    "name": "🇮🇳 Telugu",     "engine": "sarvam"},
+        {"code": "gu",    "name": "🇮🇳 Gujarati",   "engine": "sarvam"},
+        {"code": "kn",    "name": "🇮🇳 Kannada",    "engine": "sarvam"},
+        {"code": "ml",    "name": "🇮🇳 Malayalam",  "engine": "sarvam"},
+        {"code": "mr",    "name": "🇮🇳 Marathi",    "engine": "sarvam"},
+        {"code": "pa",    "name": "🇮🇳 Punjabi",    "engine": "sarvam"},
+        {"code": "or",    "name": "🇮🇳 Odia",       "engine": "sarvam"},
+    ]}
 
 
 @router.get("/voices")
