@@ -22,3 +22,4 @@ supabase
 python-dotenv
 pypinyin==0.55.0
 cutlet
+unidic-lite
