@@ -51,8 +51,8 @@ function detectScriptLanguage(text) {
   if (!text || text.trim().length < 3) return null
   const sample = text.slice(0, 200)
   if (/[\u0900-\u097F]/.test(sample)) return "hi"
-  if (/[\u4E00-\u9FFF]/.test(sample)) return "zh-cn"
   if (/[\u3040-\u30FF]/.test(sample)) return "ja"
+  if (/[\u4E00-\u9FFF]/.test(sample) && !/[\u3040-\u30FF]/.test(sample)) return "zh-cn"
   return null
 }
 
