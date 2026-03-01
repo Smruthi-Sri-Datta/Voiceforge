@@ -184,13 +184,13 @@ function Studio() {
         setGenerationError(errData.detail || "Generation failed. Please try again.")
         setLoading(false)
         return
-      }
-      const { job_id } = await submitRes.json()
+       }
+       const { job_id } = await submitRes.json()
 
-      // Step 2: Poll /api/status/{job_id} every 3 seconds
-      let attempts = 0
-      const maxAttempts = 100
-      while (attempts < maxAttempts) {
+       // Step 2: Poll /api/status/{job_id} every 3 seconds
+       let attempts = 0
+       const maxAttempts = 100
+       while (attempts < maxAttempts) {
         await new Promise(r => setTimeout(r, 3000))
         attempts++
 
@@ -201,41 +201,43 @@ function Studio() {
         if (result.status === "COMPLETED") {
           const url = result.audio_url
 
-        // Explicitly save audio_url to DB — don't rely on webhook alone
-        try {
-          await authFetch(`${BACKEND}/api/my-history/${job_id}/audio`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audio_url: url })
+          // Only PATCH if we actually have a URL
+          if (url) {
+            try {
+              await authFetch(`${BACKEND}/api/my-history/${job_id}/audio`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audio_url: url })
+              })
+            } catch { /* non-critical */ }
+          }
+
+          setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
+          if (result.warning) setGenerationWarning(result.warning)
+          else setGenerationWarning(null)
+          addHistoryEntry({
+            id: job_id,
+            text,
+            voice: { name: voice.name, color: voice.color, type: voice.type },
+            language, speed, audioUrl: url,
           })
-        } catch { /* non-critical */ }
+          setLoading(false)
+          return
+        }
 
-        setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
-        if (result.warning) setGenerationWarning(result.warning)
-        else setGenerationWarning(null)
-        addHistoryEntry({
-          id: job_id,
-          text,
-          voice: { name: voice.name, color: voice.color, type: voice.type },
-          language, speed, audioUrl: url,
-        })
-        setLoading(false)
-        return
+        if (result.status === "FAILED") {
+          setGenerationError(result.error || "Generation failed on RunPod.")
+          setLoading(false)
+          return
+        }
+        // IN_QUEUE or IN_PROGRESS — keep polling
       }
-
-      if (result.status === "FAILED") {
-        setGenerationError(result.error || "Generation failed on RunPod.")
-        setLoading(false)
-        return
-      }
-      // IN_QUEUE or IN_PROGRESS — keep polling
-     }
-     setGenerationError("Generation timed out. Please try again.")
+      setGenerationError("Generation timed out. Please try again.")
     } catch {
-     setGenerationError("Could not reach the backend. Make sure the server is running.")
+      setGenerationError("Could not reach the backend. Make sure the server is running.")
     }
     setLoading(false)
-   }
+  }
 
   // ── Generate with mismatch check + credit gate ────────────────
   async function generateAudio() {
@@ -506,8 +508,8 @@ function Studio() {
                 <div style={{ display: 'flex' }}>
                   {[
                     { key: 'default', label: 'Default', count: activeDefaultVoices.length },
-                    { key: 'cloned',  label: 'My Voices', count: clonedVoices.length }
-                  ].map(tab => (
+                    !isIndianLang && { key: 'cloned',  label: 'My Voices', count: clonedVoices.length }
+                  ].filter(Boolean).map(tab => (
                     <button key={tab.key} onClick={() => { setVoiceTab(tab.key); setVoiceSearch('') }}
                       style={{ background: 'transparent', border: 'none', borderBottom: voiceTab === tab.key ? '2px solid #7c3aed' : '2px solid transparent', padding: '0.5rem 1rem', marginBottom: '-1px', color: voiceTab === tab.key ? t.tabActive : t.tabInactive, fontWeight: voiceTab === tab.key ? '600' : '400', fontSize: '0.85rem', cursor: 'pointer', fontFamily: "'Segoe UI', sans-serif", display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.15s' }}>
                       {tab.label}
