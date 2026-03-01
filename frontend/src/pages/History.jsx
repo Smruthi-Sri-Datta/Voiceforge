@@ -39,12 +39,34 @@ function AudioPlayer({ src, isDark, accentColor = '#7c3aed', label }) {
   const [duration, setDuration] = useState(0)
   const [dragging, setDragging] = useState(false)
 
+  const bg    = isDark ? '#13131f' : '#f4f4f8'
+  const border = isDark ? '#1e1e2e' : '#e8e8ec'
+  const muted  = isDark ? '#555'    : '#999'
+  const track  = isDark ? '#2a2a4a' : '#e0e0e8'
+
   // Reset when src changes
   useEffect(() => {
     setPlaying(false)
     setCurrent(0)
     setDuration(0)
   }, [src])
+
+  // ── Null src guard ────────────────────────────────────────────
+  if (!src) {
+    return (
+      <div style={{
+        background: bg, border: `1px solid ${border}`,
+        borderRadius: '12px', padding: '1rem 1.1rem',
+        display: 'flex', alignItems: 'center', gap: '0.75rem',
+      }}>
+        <span style={{ fontSize: '1rem' }}>⚠️</span>
+        <div style={{ fontSize: '0.82rem', color: muted, lineHeight: '1.5' }}>
+          Audio unavailable — this entry was generated while the server was sleeping.
+          Delete and regenerate.
+        </div>
+      </div>
+    )
+  }
 
   function togglePlay() {
     const a = audioRef.current
@@ -76,20 +98,23 @@ function AudioPlayer({ src, isDark, accentColor = '#7c3aed', label }) {
     setCurrent(newTime)
   }
 
-  function download() {
-    const a = document.createElement('a')
-    a.href = src
-    a.download = label ? `${label}.wav` : 'audio.wav'
-    a.click()
+  // ── Blob download (works cross-origin with Supabase) ──────────
+  async function download() {
+    try {
+      const res  = await fetch(src)
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = label ? `${label}.mp3` : 'audio.mp3'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(src) // fallback: open in new tab
+    }
   }
 
   const progress = duration > 0 ? (current / duration) * 100 : 0
-
-  const bg     = isDark ? '#13131f' : '#f4f4f8'
-  const border = isDark ? '#1e1e2e' : '#e8e8ec'
-  const text   = isDark ? '#e2e8f0' : '#111118'
-  const muted  = isDark ? '#555'    : '#999'
-  const track  = isDark ? '#2a2a4a' : '#e0e0e8'
 
   return (
     <div style={{
@@ -125,7 +150,6 @@ function AudioPlayer({ src, isDark, accentColor = '#7c3aed', label }) {
           background: `linear-gradient(90deg, ${accentColor}, #a855f7)`,
           transition: dragging ? 'none' : 'width 0.1s linear',
         }} />
-        {/* Scrubber dot */}
         <div style={{
           position: 'absolute',
           left: `${progress}%`,
@@ -167,23 +191,23 @@ function AudioPlayer({ src, isDark, accentColor = '#7c3aed', label }) {
           {fmtTime(current)} / {fmtTime(duration)}
         </span>
 
-        {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Download */}
+        {/* Download — visible with accent color */}
         <button
           onClick={download}
-          title="Download"
+          title="Download audio"
           style={{
-            width: '30px', height: '30px', borderRadius: '8px',
-            background: 'transparent',
-            border: `1px solid ${border}`,
-            color: muted, cursor: 'pointer',
+            width: '32px', height: '32px', borderRadius: '8px',
+            background: `${accentColor}22`,
+            border: `1px solid ${accentColor}55`,
+            color: accentColor,
+            cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.82rem', flexShrink: 0, transition: 'all 0.15s',
+            fontSize: '0.85rem', flexShrink: 0, transition: 'all 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = accentColor + '55'; e.currentTarget.style.color = accentColor }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = border; e.currentTarget.style.color = muted }}
+          onMouseEnter={e => { e.currentTarget.style.background = `${accentColor}44` }}
+          onMouseLeave={e => { e.currentTarget.style.background = `${accentColor}22` }}
         >
           ⬇
         </button>
@@ -203,7 +227,6 @@ function History() {
   const [selectedId, setSelectedId]     = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
-  // ── Multi-select state ────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
   const [checkedIds, setCheckedIds] = useState(new Set())
 
@@ -235,10 +258,9 @@ function History() {
     v.name.toLowerCase().includes(search.toLowerCase())
   )
 
-  const selectedTTS   = activeTab === 'tts'    ? history.find(e => e.id === selectedId)          : null
-  const selectedVoice = activeTab === 'voices' ? clonedVoices.find(v => v.name === selectedId)   : null
+  const selectedTTS   = activeTab === 'tts'    ? history.find(e => e.id === selectedId)        : null
+  const selectedVoice = activeTab === 'voices' ? clonedVoices.find(v => v.name === selectedId) : null
 
-  // ── Multi-select helpers ──────────────────────────────────────
   const currentList = activeTab === 'tts' ? filteredTTS.map(e => e.id) : filteredVoices.map(v => v.voice_id)
   const allChecked  = currentList.length > 0 && currentList.every(id => checkedIds.has(id))
   const someChecked = checkedIds.size > 0
@@ -258,7 +280,6 @@ function History() {
     setCheckedIds(allChecked ? new Set() : new Set(currentList))
   }
 
-  // ── Confirm delete ────────────────────────────────────────────
   function confirmDelete() {
     if (!deleteTarget) return
     if (deleteTarget.type === 'tts') {
@@ -277,22 +298,6 @@ function History() {
       exitSelectMode()
     }
     setDeleteTarget(null)
-  }
-
-  // Replace the download function inside AudioPlayer
-  async function download() {
-    try {
-      const res  = await fetch(src)
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = label ? `${label}.mp3` : 'audio.mp3'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      window.open(src)   // fallback: open in new tab
-    }
   }
 
   const deleteButtonStyle = {
@@ -351,7 +356,6 @@ function History() {
       <div style={{ flex: 6, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto' }}>
         <div style={{ padding: '2.5rem 3rem 0' }}>
 
-          {/* Title + Select button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
             <div style={{ fontSize: '1.4rem', fontWeight: '700', color: t.textColor }}>History</div>
             {!selectMode
@@ -506,7 +510,7 @@ function History() {
               <div style={{ padding: '0.9rem', background: t.rowBg, border: `1px solid ${t.rowBorder}`, borderRadius: '10px', fontSize: '0.85rem', color: t.textColor, lineHeight: '1.7', maxHeight: '180px', overflowY: 'auto' }}>{selectedTTS.text}</div>
             </div>
 
-            {/* ── Custom audio player for TTS ── */}
+            {/* Audio player */}
             <div style={{ marginBottom: '1.2rem' }}>
               <div style={{ fontSize: '0.78rem', color: t.labelColor, marginBottom: '0.5rem', fontWeight: '600', letterSpacing: '0.4px' }}>AUDIO</div>
               <AudioPlayer
@@ -533,7 +537,6 @@ function History() {
           <>
             <div style={{ fontSize: '0.95rem', fontWeight: '600', color: t.textColor, marginBottom: '1.5rem' }}>Voice Detail</div>
 
-            {/* Voice avatar card */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: t.rowBg, border: `1px solid ${t.rowBorder}`, borderRadius: '12px', marginBottom: '1.5rem' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: `radial-gradient(circle at 35% 35%, ${selectedVoice.color}cc, ${selectedVoice.color}44)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '700', fontSize: '1.1rem', flexShrink: 0 }}>{selectedVoice.name[0]}</div>
               <div>
@@ -542,7 +545,7 @@ function History() {
               </div>
             </div>
 
-            {/* ── Custom audio player for cloned voice — always shown ── */}
+            {/* Audio player for cloned voice — with download */}
             <div style={{ marginBottom: '1.5rem' }}>
               <div style={{ fontSize: '0.78rem', color: t.labelColor, marginBottom: '0.5rem', fontWeight: '600', letterSpacing: '0.4px' }}>VOICE SAMPLE</div>
               <AudioPlayer
