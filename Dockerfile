@@ -18,7 +18,9 @@ RUN apt-get update -qq && \
         libmecab-dev \
         mecab-ipadic-utf8 \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /usr/local/etc \
+    && ln -s /etc/mecabrc /usr/local/etc/mecabrc
 
 # Set working directory
 WORKDIR /app
