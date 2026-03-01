@@ -160,7 +160,6 @@ function Studio() {
     tabInactive:     isDark ? '#555'    : '#999',
   }
 
-  // ── Core generate ─────────────────────────────────────────────
   async function _doGenerate() {
     setLangMismatch(null)
     setGenerationError(null)
@@ -190,44 +189,53 @@ function Studio() {
 
       // Step 2: Poll /api/status/{job_id} every 3 seconds
       let attempts = 0
-      const maxAttempts = 100  // 5 minutes max
+      const maxAttempts = 100
       while (attempts < maxAttempts) {
-        await new Promise(r => setTimeout(r, 3000))  // wait 3s
+        await new Promise(r => setTimeout(r, 3000))
         attempts++
 
         const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
         if (!statusRes.ok) continue
-
         const result = await statusRes.json()
 
         if (result.status === "COMPLETED") {
           const url = result.audio_url
-          setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
-          if (result.warning) setGenerationWarning(result.warning)
-          else setGenerationWarning(null)
-          addHistoryEntry({
-            text,
-            voice: { name: voice.name, color: voice.color, type: voice.type },
-            language, speed, audioUrl: url,
-          })
-          setLoading(false)
-          return
-        }
 
-        if (result.status === "FAILED") {
-          setGenerationError(result.error || "Generation failed on RunPod.")
-          setLoading(false)
-          return
-        }
-        // IN_QUEUE or IN_PROGRESS — keep polling
+        // Explicitly save audio_url to DB — don't rely on webhook alone
+        try {
+          await authFetch(`${BACKEND}/api/my-history/${job_id}/audio`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio_url: url })
+          })
+        } catch { /* non-critical */ }
+
+        setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
+        if (result.warning) setGenerationWarning(result.warning)
+        else setGenerationWarning(null)
+        addHistoryEntry({
+          id: job_id,
+          text,
+          voice: { name: voice.name, color: voice.color, type: voice.type },
+          language, speed, audioUrl: url,
+        })
+        setLoading(false)
+        return
       }
 
-      setGenerationError("Generation timed out. Please try again.")
+      if (result.status === "FAILED") {
+        setGenerationError(result.error || "Generation failed on RunPod.")
+        setLoading(false)
+        return
+      }
+      // IN_QUEUE or IN_PROGRESS — keep polling
+     }
+     setGenerationError("Generation timed out. Please try again.")
     } catch {
-      setGenerationError("Could not reach the backend. Make sure the server is running.")
+     setGenerationError("Could not reach the backend. Make sure the server is running.")
     }
     setLoading(false)
-  }
+   }
 
   // ── Generate with mismatch check + credit gate ────────────────
   async function generateAudio() {

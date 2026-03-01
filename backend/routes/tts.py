@@ -412,3 +412,22 @@ def clear_history(
         db.delete(g)
     db.commit()
     return {"message": "History cleared"}
+
+class AudioUrlUpdate(BaseModel):
+    audio_url: str
+
+@router.patch("/my-history/{job_id}/audio")
+def update_audio_url(
+    job_id: str,
+    payload: AudioUrlUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    gen = db.query(Generation).filter(
+        Generation.id == job_id,
+        Generation.user_id == current_user.id
+    ).first()
+    if gen and not gen.audio_url:
+        gen.audio_url = payload.audio_url
+        db.commit()
+    return {"ok": True}
