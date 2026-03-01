@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-
 const HistoryContext = createContext()
 
 export function HistoryProvider({ children }) {
@@ -11,10 +10,7 @@ export function HistoryProvider({ children }) {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!user) {
-      setHistory([])
-      return
-    }
+    if (!user) { setHistory([]); return }
     fetchHistory()
   }, [user])
 
@@ -28,8 +24,9 @@ export function HistoryProvider({ children }) {
         id:        g.id,
         text:      g.text,
         language:  g.language,
-        voice:     { name: g.speaker, color: "#7c3aed" },
-        audioUrl:  `g.audio_url`,
+        speed:     g.speed,
+        voice:     { name: g.speaker, color: '#7c3aed' },
+        audioUrl:  g.audio_url,   // ← fixed: no backticks, no healing logic
         timestamp: g.created_at,
       }))
       setHistory(entries)
@@ -41,7 +38,6 @@ export function HistoryProvider({ children }) {
   }
 
   function addHistoryEntry(entry) {
-    // Optimistically add to local state — DB already saved via backend
     const newEntry = {
       id:        entry.id || Date.now().toString(),
       text:      entry.text,
@@ -50,38 +46,32 @@ export function HistoryProvider({ children }) {
       speed:     entry.speed,
       audioUrl:  entry.audioUrl,
       timestamp: new Date().toISOString(),
-      duration:  entry.duration || null,
     }
     setHistory(prev => [newEntry, ...prev])
   }
 
   async function removeHistoryEntry(id) {
-  try {
-    await authFetch(`${BACKEND}/api/my-history/${id}`, { method: 'DELETE' })
-  } catch (err) {
-    console.error("Failed to delete generation:", err)
+    try {
+      await authFetch(`${BACKEND}/api/my-history/${id}`, { method: 'DELETE' })
+    } catch (err) {
+      console.error("Failed to delete generation:", err)
+    }
+    setHistory(prev => prev.filter(e => e.id !== id))
   }
-  setHistory(prev => prev.filter(e => e.id !== id))
-}
 
-async function clearHistory() {
-  try {
-    await authFetch(`${BACKEND}/api/my-history`, { method: 'DELETE' })
-  } catch (err) {
-    console.error("Failed to clear history:", err)
+  async function clearHistory() {
+    try {
+      await authFetch(`${BACKEND}/api/my-history`, { method: 'DELETE' })
+    } catch (err) {
+      console.error("Failed to clear history:", err)
+    }
+    setHistory([])
   }
-  setHistory([])
-}
 
-  
   return (
     <HistoryContext.Provider value={{
-      history,
-      addHistoryEntry,
-      removeHistoryEntry,
-      clearHistory,
-      refreshHistory: fetchHistory,
-      loading,
+      history, addHistoryEntry, removeHistoryEntry,
+      clearHistory, refreshHistory: fetchHistory, loading,
     }}>
       {children}
     </HistoryContext.Provider>
