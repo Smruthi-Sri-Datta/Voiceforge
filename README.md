@@ -12,7 +12,7 @@
 
 <p align="center">
   Production-grade AI voice platform with multi-language TTS, voice cloning, and serverless GPU inference.<br/>
-  Built as a full-stack AI engineering portfolio project.
+  Built as a full-stack AI engineering project.
 </p>
 
 ---
@@ -148,3 +148,4 @@ VoiceForge/
 <p align="center">
   Built by <strong>Smruthi Sri Datta</strong> &nbsp;•&nbsp; AI Enthusiast
 </p>
+
