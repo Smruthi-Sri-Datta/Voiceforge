@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="voiceforge-logo.svg" alt="VoiceForge" width="420"/>
+  <img src="voiceforge-logo.svg" alt="VoiceForge" width="280"/>
 </p>
 
 <p align="center">
