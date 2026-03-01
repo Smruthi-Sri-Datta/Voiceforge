@@ -279,6 +279,22 @@ function History() {
     setDeleteTarget(null)
   }
 
+  // Replace the download function inside AudioPlayer
+  async function download() {
+    try {
+      const res  = await fetch(src)
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = label ? `${label}.mp3` : 'audio.mp3'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(src)   // fallback: open in new tab
+    }
+  }
+
   const deleteButtonStyle = {
     background: 'transparent', border: '1px solid transparent',
     color: t.labelColor, cursor: 'pointer',

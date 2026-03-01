@@ -209,14 +209,25 @@ def get_job_status(
         )
         result    = response.json()
         rp_status = result.get("status")
-
+        
+        # ── replace the COMPLETED block inside get_job_status ──
         if rp_status == "COMPLETED":
-            output = result.get("output", {})
-            return {
-                "status":    "COMPLETED",
-                "audio_url": output.get("audio_url"),
-                "warning":   output.get("warning"),
-            }
+          output    = result.get("output", {})
+          audio_url = output.get("audio_url")
+          # Save to DB so future fetches (page refresh) work
+          try:
+            gen = db.query(Generation).filter(Generation.id == job_id).first()
+            if gen and not gen.audio_url:
+              gen.audio_url = audio_url
+              db.commit()
+              print(f"[Status] Saved audio_url for job {job_id} via fallback")
+          except Exception as e:
+            print(f"[Status] DB save error: {e}")
+          return {
+            "status":    "COMPLETED",
+            "audio_url": audio_url,
+            "warning":   output.get("warning"),
+        }
         elif rp_status == "FAILED":
             return {"status": "FAILED", "error": result.get("error", "Job failed")}
         else:
