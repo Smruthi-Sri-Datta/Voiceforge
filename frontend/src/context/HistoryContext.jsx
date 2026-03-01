@@ -29,7 +29,7 @@ export function HistoryProvider({ children }) {
         text:      g.text,
         language:  g.language,
         voice:     { name: g.speaker, color: "#7c3aed" },
-        audioUrl:  `${BACKEND}/api/audio/${g.file}`,
+        audioUrl:  `g.audio_url`,
         timestamp: g.created_at,
       }))
       setHistory(entries)

@@ -252,7 +252,7 @@ function Studio() {
     const response = await authFetch(`${BACKEND}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0 })
+      body: JSON.stringify({ text: previewText, speaker: v.name, language: "en", speed: 1.0, is_preview: true })
     })
     const data = await response.json()
     const job_id = data.job_id
