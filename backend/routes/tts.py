@@ -361,7 +361,7 @@ def get_my_history(
             "text":       g.text,
             "language":   g.language,
             "speaker":    g.speaker,
-            "speed":      g.speed,
+            "speed":      getattr(g, 'speed', 1.0),   # default 1.0 if column doesn't exist,
             "file":       f"{g.id}.mp3",
             "audio_url":  g.audio_url,
             "created_at": g.created_at.isoformat(),
