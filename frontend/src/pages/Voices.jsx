@@ -198,12 +198,36 @@ function Voices() {
     if (previewUrls[vName]) { setPreviewingVoice(vName); return }
     setPreviewingVoice(vName)
     try {
+      // Step 1: Submit job
       const response = await authFetch(`${BACKEND}/api/generate`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: `Hi, I'm ${vName}. How can I help you today?`, speaker: vName, language: "en", speed: 1.0 })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `Hi, I'm ${vName}. How can I help you today?`,
+          speaker: vName,
+          language: "en",
+          speed: 1.0,
+          is_preview: true,   // ← don't save to history
+        })
       })
       const data = await response.json()
-      setPreviewUrls(prev => ({ ...prev, [vName]: `${BACKEND}/api/audio/${data.file}` }))
+      const job_id = data.job_id
+      if (!job_id) throw new Error("No job_id returned")
+
+      // Step 2: Poll /api/status/{job_id} every 3 seconds
+      let attempts = 0
+      while (attempts < 100) {
+        await new Promise(r => setTimeout(r, 3000))
+        attempts++
+        const statusRes = await authFetch(`${BACKEND}/api/status/${job_id}`)
+        const result = await statusRes.json()
+        if (result.status === "COMPLETED") {
+          setPreviewUrls(prev => ({ ...prev, [vName]: result.audio_url }))
+          return
+        }
+        if (result.status === "FAILED") throw new Error("Job failed")
+      }
+      throw new Error("Timed out")
     } catch {
       setPreviewingVoice(null)
       setError("Preview failed. Make sure the backend is running.")
