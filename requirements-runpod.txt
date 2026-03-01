@@ -1,0 +1,23 @@
+# VoiceForge RunPod Serverless — TTS only
+# No auth, no DB, no JWT — those live in Railway
+
+# RunPod Serverless SDK
+runpod
+
+# TTS engines
+coqui-tts==0.27.5
+langdetect
+
+# HTTP requests (Sarvam AI)
+requests
+httpx
+
+# Audio processing
+ffmpeg-python
+
+# Supabase storage (direct REST calls in handler)
+supabase
+
+# Environment
+python-dotenv
+pypinyin==0.55.0
