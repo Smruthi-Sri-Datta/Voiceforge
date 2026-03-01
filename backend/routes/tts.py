@@ -15,9 +15,9 @@ router = APIRouter()
 
 SUPABASE_URL   = os.getenv("SUPABASE_URL")
 SUPABASE_KEY   = os.getenv("SUPABASE_SERVICE_KEY")
-RUNPOD_URL     = os.getenv("RUNPOD_URL")        # https://api.runpod.ai/v2/bcgrtz1xbml3iw/runsync
+RUNPOD_URL     = os.getenv("RUNPOD_URL")
 RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
-BACKEND_URL    = os.getenv("BACKEND_URL")       # https://voiceforge-4v8l.onrender.com
+BACKEND_URL    = os.getenv("BACKEND_URL")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -36,12 +36,16 @@ def delete_from_supabase(bucket: str, filename: str):
 # ── Request Models ────────────────────────────────────────────────────────────
 
 class GenerateRequest(BaseModel):
-    text:     str
-    speaker:  str = "Ana Florence"
-    language: str = "en"
-    speed:    float = 1.0
-    voice_id: Optional[str] = None
+    text:       str
+    speaker:    str = "Ana Florence"
+    language:   str = "en"
+    speed:      float = 1.0
+    voice_id:   Optional[str] = None
     is_preview: bool = False
+
+
+class AudioUrlUpdate(BaseModel):
+    audio_url: str
 
 
 # ── Static Routes ─────────────────────────────────────────────────────────────
@@ -49,22 +53,22 @@ class GenerateRequest(BaseModel):
 @router.get("/languages")
 def get_languages():
     return {"languages": [
-        {"code": "en",    "name": "🇬🇧 English",    "engine": "xtts"},
-        {"code": "fr",    "name": "🇫🇷 French",     "engine": "xtts"},
-        {"code": "de",    "name": "🇩🇪 German",     "engine": "xtts"},
-        {"code": "es",    "name": "🇪🇸 Spanish",    "engine": "xtts"},
-        {"code": "ja",    "name": "🇯🇵 Japanese",   "engine": "xtts"},
-        {"code": "zh-cn", "name": "🇨🇳 Chinese",    "engine": "xtts"},
-        {"code": "hi",    "name": "🇮🇳 Hindi",      "engine": "sarvam"},
-        {"code": "bn",    "name": "🇮🇳 Bengali",    "engine": "sarvam"},
-        {"code": "ta",    "name": "🇮🇳 Tamil",      "engine": "sarvam"},
-        {"code": "te",    "name": "🇮🇳 Telugu",     "engine": "sarvam"},
-        {"code": "gu",    "name": "🇮🇳 Gujarati",   "engine": "sarvam"},
-        {"code": "kn",    "name": "🇮🇳 Kannada",    "engine": "sarvam"},
-        {"code": "ml",    "name": "🇮🇳 Malayalam",  "engine": "sarvam"},
-        {"code": "mr",    "name": "🇮🇳 Marathi",    "engine": "sarvam"},
-        {"code": "pa",    "name": "🇮🇳 Punjabi",    "engine": "sarvam"},
-        {"code": "or",    "name": "🇮🇳 Odia",       "engine": "sarvam"},
+        {"code": "en",    "name": "🇬🇧 English",   "engine": "xtts"},
+        {"code": "fr",    "name": "🇫🇷 French",    "engine": "xtts"},
+        {"code": "de",    "name": "🇩🇪 German",    "engine": "xtts"},
+        {"code": "es",    "name": "🇪🇸 Spanish",   "engine": "xtts"},
+        {"code": "ja",    "name": "🇯🇵 Japanese",  "engine": "xtts"},
+        {"code": "zh-cn", "name": "🇨🇳 Chinese",   "engine": "xtts"},
+        {"code": "hi",    "name": "🇮🇳 Hindi",     "engine": "sarvam"},
+        {"code": "bn",    "name": "🇮🇳 Bengali",   "engine": "sarvam"},
+        {"code": "ta",    "name": "🇮🇳 Tamil",     "engine": "sarvam"},
+        {"code": "te",    "name": "🇮🇳 Telugu",    "engine": "sarvam"},
+        {"code": "gu",    "name": "🇮🇳 Gujarati",  "engine": "sarvam"},
+        {"code": "kn",    "name": "🇮🇳 Kannada",   "engine": "sarvam"},
+        {"code": "ml",    "name": "🇮🇳 Malayalam", "engine": "sarvam"},
+        {"code": "mr",    "name": "🇮🇳 Marathi",   "engine": "sarvam"},
+        {"code": "pa",    "name": "🇮🇳 Punjabi",   "engine": "sarvam"},
+        {"code": "or",    "name": "🇮🇳 Odia",      "engine": "sarvam"},
     ]}
 
 
@@ -81,14 +85,6 @@ def generate_audio(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Submit job to RunPod async with webhook.
-    Returns job_id instantly (~2s).
-    RunPod calls /api/webhook/runpod when done.
-    Frontend polls /api/status/{job_id} every 3s.
-    """
-    # If custom voice: download from Supabase and encode as base64
-    # handler.py expects voice_wav_base64, not a URL
     voice_wav_b64 = None
     if request.voice_id:
         voice = db.query(Voice).filter(
@@ -121,7 +117,7 @@ def generate_audio(
                     "speaker":          request.speaker,
                     "language":         request.language,
                     "speed":            request.speed,
-                    "voice_wav_base64": voice_wav_b64,  # None for default voices
+                    "voice_wav_base64": voice_wav_b64,
                 },
                 "webhook": webhook_url
             },
@@ -136,7 +132,6 @@ def generate_audio(
     if not job_id:
         raise HTTPException(status_code=502, detail="RunPod did not return a job ID")
 
-    # Save pending record only for real generations, not previews
     if not request.is_preview:
         try:
             generation = Generation(
@@ -158,10 +153,6 @@ def generate_audio(
 
 @router.post("/webhook/runpod")
 def runpod_webhook(payload: dict, db: Session = Depends(get_db)):
-    """
-    RunPod calls this when a generate job completes.
-    Saves result to DB so /status can return it instantly (no timeout).
-    """
     status = payload.get("status")
     job_id = payload.get("id")
     output = payload.get("output", {})
@@ -170,10 +161,11 @@ def runpod_webhook(payload: dict, db: Session = Depends(get_db)):
 
     if status == "COMPLETED" and job_id:
         audio_url = output.get("audio_url")
+        print(f"[Webhook] audio_url={audio_url}")
         try:
             generation = db.query(Generation).filter(Generation.id == job_id).first()
             if generation:
-                generation.audio_url = audio_url   # ← update existing record
+                generation.audio_url = audio_url
                 db.commit()
                 print(f"[Webhook] Updated job_id={job_id} audio_url={audio_url}")
             else:
@@ -190,11 +182,6 @@ def get_job_status(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Frontend polls this every 3s.
-    Checks DB first (instant) — populated by webhook.
-    Falls back to RunPod API if webhook hasn't fired yet.
-    """
     # Fast path: webhook already saved result to DB
     generation = db.query(Generation).filter(Generation.id == job_id).first()
     if generation and generation.audio_url:
@@ -209,32 +196,56 @@ def get_job_status(
         )
         result    = response.json()
         rp_status = result.get("status")
-        
-        # ── replace the COMPLETED block inside get_job_status ──
+
+        print(f"[Status] job={job_id} rp_status={rp_status} output={result.get('output')}")
+
         if rp_status == "COMPLETED":
-          output    = result.get("output", {})
-          audio_url = output.get("audio_url")
-          # Save to DB so future fetches (page refresh) work
-          try:
-            gen = db.query(Generation).filter(Generation.id == job_id).first()
-            if gen and not gen.audio_url:
-              gen.audio_url = audio_url
-              db.commit()
-              print(f"[Status] Saved audio_url for job {job_id} via fallback")
-          except Exception as e:
-            print(f"[Status] DB save error: {e}")
-          return {
-            "status":    "COMPLETED",
-            "audio_url": audio_url,
-            "warning":   output.get("warning"),
-        }
+            output    = result.get("output", {})
+            audio_url = output.get("audio_url")
+            print(f"[Status] job={job_id} audio_url={audio_url}")
+
+            try:
+                gen = db.query(Generation).filter(Generation.id == job_id).first()
+                if gen and not gen.audio_url and audio_url:
+                    gen.audio_url = audio_url
+                    db.commit()
+                    print(f"[Status] Saved audio_url for job {job_id} via fallback")
+            except Exception as e:
+                print(f"[Status] DB save error: {e}")
+
+            return {
+                "status":    "COMPLETED",
+                "audio_url": audio_url,
+                "warning":   output.get("warning"),
+            }
+
         elif rp_status == "FAILED":
             return {"status": "FAILED", "error": result.get("error", "Job failed")}
         else:
-            return {"status": rp_status}   # IN_QUEUE or IN_PROGRESS
+            return {"status": rp_status}
 
     except Exception:
         return {"status": "IN_QUEUE"}
+
+
+# ── PATCH audio_url — called by frontend after COMPLETED ─────────────────────
+
+@router.patch("/my-history/{job_id}/audio")
+def update_audio_url(
+    job_id: str,
+    payload: AudioUrlUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    gen = db.query(Generation).filter(
+        Generation.id == job_id,
+        Generation.user_id == current_user.id
+    ).first()
+    if gen and not gen.audio_url:
+        gen.audio_url = payload.audio_url
+        db.commit()
+        print(f"[Patch] Saved audio_url for job {job_id} via frontend PATCH")
+    return {"ok": True}
 
 
 # ── Voice Cloning ─────────────────────────────────────────────────────────────
@@ -261,7 +272,7 @@ async def clone_voice(
             json={
                 "input": {
                     "action":           "clone_voice",
-                    "voice_wav_base64": audio_b64,   # ← correct field name for handler.py
+                    "voice_wav_base64": audio_b64,
                     "voice_id":         voice_id,
                 },
                 "webhook": webhook_url
@@ -274,7 +285,6 @@ async def clone_voice(
 
     job_id = response.json().get("id")
 
-    # Save voice record to DB immediately (audio_url populated when webhook fires)
     voice_count = db.query(Voice).filter(Voice.user_id == current_user.id).count()
     voice_name  = f"V{voice_count + 1}"
 
@@ -293,10 +303,6 @@ async def clone_voice(
 
 @router.post("/webhook/runpod/voice")
 def runpod_voice_webhook(payload: dict, db: Session = Depends(get_db)):
-    """
-    RunPod calls this when a clone_voice job completes.
-    Updates the voice record with the audio_url.
-    """
     status = payload.get("status")
     output = payload.get("output", {})
 
@@ -355,6 +361,7 @@ def get_my_history(
             "text":       g.text,
             "language":   g.language,
             "speaker":    g.speaker,
+            "speed":      g.speed,
             "file":       f"{g.id}.mp3",
             "audio_url":  g.audio_url,
             "created_at": g.created_at.isoformat(),
@@ -412,22 +419,3 @@ def clear_history(
         db.delete(g)
     db.commit()
     return {"message": "History cleared"}
-
-class AudioUrlUpdate(BaseModel):
-    audio_url: str
-
-@router.patch("/my-history/{job_id}/audio")
-def update_audio_url(
-    job_id: str,
-    payload: AudioUrlUpdate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    gen = db.query(Generation).filter(
-        Generation.id == job_id,
-        Generation.user_id == current_user.id
-    ).first()
-    if gen and not gen.audio_url:
-        gen.audio_url = payload.audio_url
-        db.commit()
-    return {"ok": True}
