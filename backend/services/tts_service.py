@@ -182,11 +182,15 @@ class TTSService:
 
         if speed != 1.0:
             sped_path = wav_path.replace("_temp.wav", "_fast.wav")
-            subprocess.run([
+            result = subprocess.run([
                 "ffmpeg", "-i", wav_path,
                 "-filter:a", f"atempo={speed}",
                 sped_path, "-y"
             ], capture_output=True)
+        if result.returncode != 0:
+            raise ValueError(f"Audio conversion failed: {result.stderr.decode()}")
+        if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) == 0:
+            raise ValueError("Audio conversion produced empty file")
             os.replace(sped_path, wav_path)
 
         self._convert_to_mp3(wav_path, output_path)
@@ -196,12 +200,16 @@ class TTSService:
 
     # ── WAV → MP3 ──────────────────────────────────────────────
     def _convert_to_mp3(self, wav_path, mp3_path):
-        subprocess.run([
+        result = subprocess.run([
             "ffmpeg", "-i", wav_path,
             "-codec:a", "libmp3lame",
             "-qscale:a", "2",
             mp3_path, "-y"
         ], capture_output=True)
+        if result.returncode != 0:
+            raise ValueError(f"Audio conversion failed: {result.stderr.decode()}")
+        if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) == 0:
+            raise ValueError("Audio conversion produced empty file")
 
     # ── Language mismatch detection ────────────────────────────
     def _check_language_mismatch(self, text, language):
