@@ -419,3 +419,66 @@ def clear_history(
         db.delete(g)
     db.commit()
     return {"message": "History cleared"}
+
+@router.get("/audio/{job_id}")
+async def proxy_audio(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    from fastapi.responses import StreamingResponse
+    gen = db.query(Generation).filter(
+        Generation.id == job_id,
+        Generation.user_id == current_user.id
+    ).first()
+    if not gen or not gen.audio_url:
+        raise HTTPException(status_code=404, detail="Audio not found")
+
+    async def stream():
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", gen.audio_url, timeout=30) as r:
+                async for chunk in r.aiter_bytes(chunk_size=8192):
+                    yield chunk
+
+    return StreamingResponse(stream(), media_type="audio/mpeg")
+
+
+@router.get("/voice-audio/{voice_id}")
+async def proxy_voice_audio(
+    voice_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    from fastapi.responses import StreamingResponse
+    voice = db.query(Voice).filter(
+        Voice.id == voice_id,
+        Voice.user_id == current_user.id
+    ).first()
+    if not voice or not voice.audio_url:
+        raise HTTPException(status_code=404, detail="Voice audio not found")
+
+    async def stream():
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", voice.audio_url, timeout=30) as r:
+                async for chunk in r.aiter_bytes(chunk_size=8192):
+                    yield chunk
+
+    return StreamingResponse(stream(), media_type="audio/wav")
+
+
+@router.get("/proxy-audio")
+async def proxy_any_audio(
+    url: str,
+    current_user = Depends(get_current_user)
+):
+    from fastapi.responses import StreamingResponse
+    if "supabase.co" not in url:
+        raise HTTPException(status_code=400, detail="Invalid audio source")
+
+    async def stream():
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", url, timeout=30) as r:
+                async for chunk in r.aiter_bytes(chunk_size=8192):
+                    yield chunk
+
+    return StreamingResponse(stream(), media_type="audio/mpeg")

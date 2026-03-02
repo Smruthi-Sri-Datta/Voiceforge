@@ -6,7 +6,7 @@ import { useHistory } from '../context/HistoryContext'
 const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
 function getAudioUrl(v) {
-  return v.audio_url || v.previewUrl || `${BACKEND}/api/audio/${v.voice_id}.wav`
+  return `${BACKEND}/api/voice-audio/${v.voice_id}`
 }
 
 const LANGUAGE_NAMES = {

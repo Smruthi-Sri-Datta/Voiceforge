@@ -26,7 +26,7 @@ export function HistoryProvider({ children }) {
         language:  g.language,
         speed:     g.speed,
         voice:     { name: g.speaker, color: '#7c3aed' },
-        audioUrl:  g.audio_url,   // ← fixed: no backticks, no healing logic
+        audioUrl:  g.audio_url ? `${BACKEND}/api/audio/${g.id}` : null,   // ← fixed: no backticks, no healing logic
         timestamp: g.created_at,
       }))
       setHistory(entries)

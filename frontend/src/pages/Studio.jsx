@@ -44,7 +44,7 @@ const SUGGESTIONS = [
 ]
 
 function getAudioUrl(v) {
-  return v.audio_url || v.previewUrl || `${BACKEND}/api/audio/${v.voice_id}.wav`
+  return `${BACKEND}/api/voice-audio/${v.voice_id}`
 }
 
 function detectScriptLanguage(text) {
@@ -212,14 +212,15 @@ function Studio() {
             } catch { /* non-critical */ }
           }
 
-          setBottomBar({ url, label: voice.name, color: voice.color, isPreview: false })
+          const proxyUrl = `${BACKEND}/api/audio/${job_id}`
+          setBottomBar({ url: proxyUrl, label: voice.name, color: voice.color, isPreview: false })
           if (result.warning) setGenerationWarning(result.warning)
           else setGenerationWarning(null)
           addHistoryEntry({
             id: job_id,
             text,
             voice: { name: voice.name, color: voice.color, type: voice.type },
-            language, speed, audioUrl: url,
+            language, speed, audioUrl: proxyUrl,
           })
           setLoading(false)
           return
@@ -277,8 +278,9 @@ function Studio() {
       const result = await statusRes.json()
       if (result.status === "COMPLETED") {
         const url = result.audio_url
-        setPreviewCache(prev => ({ ...prev, [v.name]: url }))
-        setBottomBar({ url, label: v.name, color: v.color, isPreview: true })
+        const proxyPreviewUrl = `${BACKEND}/api/proxy-audio?url=${encodeURIComponent(url)}`
+        setPreviewCache(prev => ({ ...prev, [v.name]: proxyPreviewUrl }))
+        setBottomBar({ url: proxyPreviewUrl, label: v.name, color: v.color, isPreview: true })
         break
       }
       if (result.status === "FAILED") break
