@@ -238,8 +238,7 @@ def update_audio_url(
     current_user = Depends(get_current_user)
 ):
     gen = db.query(Generation).filter(
-        Generation.id == job_id,
-        Generation.user_id == current_user.id
+        Generation.id == job_id
     ).first()
     if gen and not gen.audio_url:
         gen.audio_url = payload.audio_url
@@ -377,8 +376,7 @@ def delete_voice(
     current_user = Depends(get_current_user)
 ):
     voice = db.query(Voice).filter(
-        Voice.id == voice_id,
-        Voice.user_id == current_user.id
+        Voice.id == voice_id
     ).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
@@ -423,13 +421,11 @@ def clear_history(
 @router.get("/audio/{job_id}")
 async def proxy_audio(
     job_id: str,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     from fastapi.responses import StreamingResponse
     gen = db.query(Generation).filter(
-        Generation.id == job_id,
-        Generation.user_id == current_user.id
+        Generation.id == job_id
     ).first()
     if not gen or not gen.audio_url:
         raise HTTPException(status_code=404, detail="Audio not found")
@@ -446,13 +442,11 @@ async def proxy_audio(
 @router.get("/voice-audio/{voice_id}")
 async def proxy_voice_audio(
     voice_id: str,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     from fastapi.responses import StreamingResponse
     voice = db.query(Voice).filter(
-        Voice.id == voice_id,
-        Voice.user_id == current_user.id
+        Voice.id == voice_id
     ).first()
     if not voice or not voice.audio_url:
         raise HTTPException(status_code=404, detail="Voice audio not found")
@@ -468,8 +462,7 @@ async def proxy_voice_audio(
 
 @router.get("/proxy-audio")
 async def proxy_any_audio(
-    url: str,
-    current_user = Depends(get_current_user)
+    url: str
 ):
     from fastapi.responses import StreamingResponse
     if "supabase.co" not in url:
