@@ -176,7 +176,7 @@ function Studio() {
           speaker:  isIndianLang ? voice.name.toLowerCase() : voice.name,
           language,
           speed,
-          voice_id: voice.type === 'custom' ? voice.voice_id : null,
+          voice_id: voice.voice_id || null,
         })
       })
       if (!submitRes.ok) {

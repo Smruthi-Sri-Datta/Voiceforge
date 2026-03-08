@@ -93,6 +93,8 @@ def generate_audio(
         ).first()
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
+        if not voice.audio_url:
+            raise HTTPException(status_code=400, detail="Voice is still processing. Please wait a moment and try again.")
         if voice.audio_url:
             try:
                 r = httpx.get(voice.audio_url, timeout=30)

@@ -137,7 +137,7 @@ function Voices() {
       addClonedVoice({
         name: voiceName.trim(),
         color: `hsl(${Math.random() * 360}, 70%, 55%)`,
-        type: "cloned",
+        type: "custom",
         voice_id: data.voice_id,
         previewUrl,
       })
