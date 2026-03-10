@@ -189,8 +189,7 @@ export default function AuthModal({ reason }) {
              step === 'register' ? 'Create an account'      :
              step === 'forgot'   ? 'Reset your password'    :
              step === 'reset'    ? 'Set new password'       :
-             reason === 'tts'    ? 'Free generation used'   :
-             reason === 'clone'  ? 'Free clone used'        : 'Sign in to VoiceForge'}
+             'Sign in to VoiceForge'}
           </div>
           <div style={{ fontSize: '0.78rem', color: t.labelColor, marginTop: '0.25rem' }}>
             {step === 'otp'    ? `Code sent to ${email}`           :

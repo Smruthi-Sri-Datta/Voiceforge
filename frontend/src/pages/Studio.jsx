@@ -394,7 +394,6 @@ function Studio() {
               </div>
               {!isAuthenticated && (
                 <div style={{ fontSize: '0.75rem', fontWeight: '500', color: guestCredits.tts > 0 ? '#a78bfa' : '#ef4444' }}>
-                  {guestCredits.tts > 0 ? `${guestCredits.tts} free generation remaining` : '0 free generations — sign in to continue'}
                 </div>
               )}
             </div>

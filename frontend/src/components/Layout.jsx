@@ -72,32 +72,7 @@ export default function Layout({ children }) {
         </div>
 
         {/* ── Guest credit indicator (only for guests) ── */}
-        {!isAuthenticated && (
-          <div style={{
-            marginTop: 'auto', padding: '0.75rem 0.8rem',
-            background: isDark ? '#13131f' : '#f4f4f8',
-            border: `1px solid ${t.sidebarBorder}`,
-            borderRadius: '10px',
-          }}>
-            <div style={{ fontSize: '0.72rem', fontWeight: '700', color: t.labelColor, letterSpacing: '0.4px', marginBottom: '0.5rem' }}>
-              FREE CREDITS
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.78rem', color: t.sidebarText }}>⚡ TTS</span>
-                <span style={{ fontSize: '0.78rem', fontWeight: '700', color: guestCredits.tts > 0 ? '#a78bfa' : '#ef4444' }}>
-                  {guestCredits.tts} left
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.78rem', color: t.sidebarText }}>🎙️ Clone</span>
-                <span style={{ fontSize: '0.78rem', fontWeight: '700', color: guestCredits.clone > 0 ? '#a78bfa' : '#ef4444' }}>
-                  {guestCredits.clone} left
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+
       </div>
 
       {/* ── Main Content ── */}
