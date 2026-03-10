@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -254,6 +254,7 @@ def update_audio_url(
 @router.post("/clone-voice")
 async def clone_voice(
     file: UploadFile = File(...),
+    name: str = Form(""),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -287,7 +288,7 @@ async def clone_voice(
     job_id = response.json().get("id")
 
     voice_count = db.query(Voice).filter(Voice.user_id == current_user.id).count()
-    voice_name  = f"V{voice_count + 1}"
+    voice_name  = name.strip() if name.strip() else f"V{voice_count + 1}"
 
     voice = Voice(
         id        = voice_id,

@@ -174,13 +174,6 @@ export function AuthProvider({ children }) {
   // ── Guest credit system ───────────────────────────────────
   function useGuestCredit(type) {
     if (user) return true
-    const current = loadCredits()
-    if (current[type] > 0) {
-      const updated = { ...current, [type]: current[type] - 1 }
-      saveCredits(updated)
-      setGuestCredits(updated)
-      return true
-    }
     setAuthModalReason(type)
     setAuthModalOpen(true)
     return false

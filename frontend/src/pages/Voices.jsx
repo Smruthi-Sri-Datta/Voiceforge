@@ -131,6 +131,7 @@ function Voices() {
     try {
       const formData = new FormData()
       formData.append("file", file)
+      formData.append("name", voiceName.trim())
       const response = await authFetch(`${BACKEND}/api/clone-voice`, { method: "POST", body: formData })
       const data = await response.json()
       const previewUrl = URL.createObjectURL(file)
