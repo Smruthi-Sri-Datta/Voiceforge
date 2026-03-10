@@ -66,7 +66,7 @@ function getAudioUrl(v) {
 function Voices() {
   const { isDark } = useTheme()
   const { clonedVoices, addClonedVoice, removeClonedVoice, DEFAULT_VOICES } = useVoices()
-  const { useGuestCredit, authFetch } = useAuth()   // ← credit gate
+  const { useGuestCredit, authFetch, user, openAuthModal } = useAuth()   // ← credit gate
 
   const [uploading, setUploading]             = useState(false)
   const [dragOver, setDragOver]               = useState(false)
@@ -196,6 +196,7 @@ function Voices() {
   }
 
   async function previewDefaultVoice(vName) {
+    if (!user) { openAuthModal(); return }
     if (previewUrls[vName]) { setPreviewingVoice(vName); return }
     setPreviewingVoice(vName)
     try {
